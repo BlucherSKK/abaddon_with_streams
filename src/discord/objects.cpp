@@ -714,6 +714,56 @@ void to_json(nlohmann::json &j, const ModifyCurrentUserVoiceStateObject &m) {
         }
     }
 }
+
+void to_json(nlohmann::json &j, const StreamCreateMessage &m) {
+    j["op"] = GatewayOp::StreamCreate;
+    j["d"]["type"] = m.Type;
+    if (m.GuildID.has_value()) {
+        j["d"]["guild_id"] = *m.GuildID;
+    } else {
+        j["d"]["guild_id"] = nullptr;
+    }
+    j["d"]["channel_id"] = m.ChannelID;
+    if (m.PreferredRegion.has_value()) {
+        j["d"]["preferred_region"] = *m.PreferredRegion;
+    } else {
+        j["d"]["preferred_region"] = nullptr;
+    }
+}
+
+void to_json(nlohmann::json &j, const StreamDeleteMessage &m) {
+    j["op"] = GatewayOp::StreamDelete;
+    j["d"]["stream_key"] = m.StreamKey;
+}
+
+void to_json(nlohmann::json &j, const StreamWatchMessage &m) {
+    j["op"] = GatewayOp::StreamWatch;
+    j["d"]["stream_key"] = m.StreamKey;
+}
+
+void to_json(nlohmann::json &j, const StreamSetPausedMessage &m) {
+    j["op"] = GatewayOp::StreamSetPaused;
+    j["d"]["stream_key"] = m.StreamKey;
+    j["d"]["paused"] = m.Paused;
+}
+
+void from_json(const nlohmann::json &j, StreamCreateData &m) {
+    JS_D("stream_key", m.StreamKey);
+    JS_O("paused", m.Paused);
+    JS_O("region", m.Region);
+    JS_ON("viewer_ids", m.ViewerIDs);
+}
+
+void from_json(const nlohmann::json &j, StreamServerUpdateData &m) {
+    JS_D("stream_key", m.StreamKey);
+    JS_D("endpoint", m.Endpoint);
+    JS_D("token", m.Token);
+}
+
+void from_json(const nlohmann::json &j, StreamDeleteData &m) {
+    JS_D("stream_key", m.StreamKey);
+    JS_O("reason", m.Reason);
+}
 #endif
 
 void from_json(const nlohmann::json &j, VoiceState &m) {

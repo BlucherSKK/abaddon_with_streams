@@ -3,13 +3,26 @@
 #include "abaddon.hpp"
 
 VoiceWindowSpeakerListEntry::VoiceWindowSpeakerListEntry(Snowflake id)
-    : m_main(Gtk::ORIENTATION_VERTICAL)
+    : m_id(id)
+    , m_main(Gtk::ORIENTATION_VERTICAL)
     , m_horz(Gtk::ORIENTATION_HORIZONTAL)
     , m_avatar(32, 32)
+    , m_stream_btn("Live")
     , m_mute("Mute") {
     m_name.set_halign(Gtk::ALIGN_START);
     m_name.set_hexpand(true);
     m_mute.set_halign(Gtk::ALIGN_END);
+
+    m_stream_btn.set_tooltip_text("User is streaming. Click to watch");
+    m_stream_btn.set_no_show_all(true);
+    m_stream_btn.signal_clicked().connect([this]() {
+        auto &discord = Abaddon::Get().GetDiscordClient();
+        const auto channel_id = discord.GetVoiceChannelID();
+        if (channel_id.IsValid()) {
+            const auto stream_key = discord.MakeStreamKey(channel_id, m_id);
+            discord.WatchStream(stream_key);
+        }
+    });
 
     m_volume.set_range(0.0, 200.0);
     m_volume.set_value_pos(Gtk::POS_LEFT);
@@ -20,6 +33,7 @@ VoiceWindowSpeakerListEntry::VoiceWindowSpeakerListEntry(Snowflake id)
 
     m_horz.add(m_avatar);
     m_horz.add(m_name);
+    m_horz.add(m_stream_btn);
     m_horz.add(m_mute);
     m_main.add(m_horz);
     m_main.add(m_volume);
@@ -36,9 +50,21 @@ VoiceWindowSpeakerListEntry::VoiceWindowSpeakerListEntry(Snowflake id)
         m_name.set_text("Unknown user");
     }
 
+    if (const auto state = discord.GetVoiceState(id); state.has_value()) {
+        SetStreaming(util::FlagSet(state->second.Flags, VoiceStateFlags::SelfStream));
+    }
+
     m_mute.signal_toggled().connect([this]() {
         m_signal_mute_cs.emit(m_mute.get_active());
     });
+}
+
+void VoiceWindowSpeakerListEntry::SetStreaming(bool is_streaming) {
+    if (is_streaming) {
+        m_stream_btn.show();
+    } else {
+        m_stream_btn.hide();
+    }
 }
 
 void VoiceWindowSpeakerListEntry::SetVolumeMeter(double frac) {

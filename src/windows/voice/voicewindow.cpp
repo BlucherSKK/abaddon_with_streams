@@ -19,6 +19,7 @@ VoiceWindow::VoiceWindow(Snowflake channel_id)
     , m_controls(Gtk::ORIENTATION_HORIZONTAL)
     , m_mute("Mute")
     , m_deafen("Deafen")
+    , m_stream("Stream")
     , m_noise_suppression("Suppress Noise")
     , m_mix_mono("Mix Mono")
     , m_stage_command("Request to Speak")
@@ -49,10 +50,19 @@ VoiceWindow::VoiceWindow(Snowflake channel_id)
     if (const auto self_state = discord.GetVoiceState(discord.GetUserData().ID); self_state.has_value()) {
         m_mute.set_active(util::FlagSet(self_state->second.Flags, VoiceStateFlags::SelfMute));
         m_deafen.set_active(util::FlagSet(self_state->second.Flags, VoiceStateFlags::SelfDeaf));
+        m_stream.set_active(util::FlagSet(self_state->second.Flags, VoiceStateFlags::SelfStream) || discord.IsStreaming());
     }
 
     m_mute.signal_toggled().connect(sigc::mem_fun(*this, &VoiceWindow::OnMuteChanged));
     m_deafen.signal_toggled().connect(sigc::mem_fun(*this, &VoiceWindow::OnDeafenChanged));
+    m_stream.signal_toggled().connect([this]() {
+        auto &discord = Abaddon::Get().GetDiscordClient();
+        if (m_stream.get_active()) {
+            discord.StartStream(m_channel_id);
+        } else {
+            discord.StopStream();
+        }
+    });
 
     m_scroll.set_policy(Gtk::POLICY_NEVER, Gtk::POLICY_AUTOMATIC);
     m_scroll.set_hexpand(true);
@@ -241,6 +251,7 @@ VoiceWindow::VoiceWindow(Snowflake channel_id)
     m_scroll.add(m_listing);
     m_controls.add(m_mute);
     m_controls.add(m_deafen);
+    m_controls.add(m_stream);
     m_controls.add(m_noise_suppression);
     m_controls.add(m_mix_mono);
     m_buttons.set_halign(Gtk::ALIGN_CENTER);
@@ -414,9 +425,19 @@ void VoiceWindow::OnSpeakerStateChanged(Snowflake channel_id, Snowflake user_id,
 
 void VoiceWindow::OnVoiceStateUpdate(Snowflake user_id, Snowflake channel_id, VoiceStateFlags flags) {
     auto &discord = Abaddon::Get().GetDiscordClient();
-    if (user_id != discord.GetUserData().ID) return;
+    if (user_id == discord.GetUserData().ID) {
+        m_stream.set_active(util::FlagSet(flags, VoiceStateFlags::SelfStream) || discord.IsStreaming());
+        UpdateStageCommand();
+    }
 
-    UpdateStageCommand();
+    if (auto it = m_rows.find(user_id); it != m_rows.end()) {
+        const bool is_streaming = util::FlagSet(flags, VoiceStateFlags::SelfStream);
+        if (auto speaker = dynamic_cast<VoiceWindowSpeakerListEntry *>(it->second)) {
+            speaker->SetStreaming(is_streaming);
+        } else if (auto audience = dynamic_cast<VoiceWindowAudienceListEntry *>(it->second)) {
+            audience->SetStreaming(is_streaming);
+        }
+    }
 }
 
 void VoiceWindow::OnStageInstanceCreate(const StageInstance &instance) {

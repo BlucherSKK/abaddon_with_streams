@@ -681,10 +681,11 @@ void CellRendererChannels::render_vfunc_voice_participant(const Cairo::RefPtr<Ca
     if (paned != nullptr) {
         const auto edge = std::min(paned->get_position(), background_area.get_width());
 
-        const static std::array<std::pair<VoiceStateFlags, Glib::ustring>, 3> icon_order = { {
+        const static std::array<std::pair<VoiceStateFlags, Glib::ustring>, 4> icon_order = { {
             { VoiceStateFlags::SelfMute | VoiceStateFlags::Mute, "microphone-disabled-symbolic" },
             { VoiceStateFlags::SelfDeaf | VoiceStateFlags::Deaf, "audio-volume-muted-symbolic" },
             { VoiceStateFlags::SelfVideo, "camera-web-symbolic" },
+            { VoiceStateFlags::SelfStream, "video-display-symbolic" },
         } };
 
         constexpr static int IconSize = 18;

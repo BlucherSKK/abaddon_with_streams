@@ -5,3 +5,4 @@ status/audio-volume-muted-symbolic
 devices/camera-web-symbolic
 status/user-available-symbolic
 places/folder-symbolic
+devices/video-display-symbolic

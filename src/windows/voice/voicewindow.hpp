@@ -50,6 +50,7 @@ private:
 
     Gtk::CheckButton m_mute;
     Gtk::CheckButton m_deafen;
+    Gtk::CheckButton m_stream;
 
     Gtk::ScrolledWindow m_scroll;
     Gtk::VBox m_listing;

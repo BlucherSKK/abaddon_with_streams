@@ -215,8 +215,17 @@ public:
 
     void SetVoiceMuted(bool is_mute);
     void SetVoiceDeafened(bool is_deaf);
+
+    void StartStream(Snowflake channel_id);
+    void StopStream();
+    void WatchStream(const std::string &stream_key);
+    void SetStreamPaused(bool paused);
+    [[nodiscard]] bool IsStreaming() const noexcept;
+    [[nodiscard]] std::string GetCurrentStreamKey() const;
+    [[nodiscard]] std::string MakeStreamKey(Snowflake channel_id, Snowflake user_id) const;
 #endif
 
+    [[nodiscard]] bool IsUserStreaming(Snowflake user_id) const;
     [[nodiscard]] std::optional<std::pair<Snowflake, PackedVoiceState>> GetVoiceState(Snowflake user_id) const;
     [[nodiscard]] std::unordered_set<Snowflake> GetUsersInVoiceChannel(Snowflake channel_id);
 
@@ -392,10 +401,17 @@ private:
 
     Snowflake m_voice_channel_id;
 
+    std::string m_current_stream_key;
+    bool m_is_streaming = false;
+
     void SendVoiceStateUpdate();
 
     void OnVoiceConnected();
     void OnVoiceDisconnected();
+
+    void HandleGatewayStreamCreate(const GatewayMessage &msg);
+    void HandleGatewayStreamServerUpdate(const GatewayMessage &msg);
+    void HandleGatewayStreamDelete(const GatewayMessage &msg);
 #endif
 
     void SetVoiceState(Snowflake user_id, const VoiceState &state);
@@ -489,6 +505,9 @@ public:
     using type_signal_voice_requested_disconnect = sigc::signal<void()>;
     using type_signal_voice_client_state_update = sigc::signal<void(DiscordVoiceClient::State)>;
     using type_signal_voice_channel_changed = sigc::signal<void(Snowflake)>;
+    using type_signal_stream_create = sigc::signal<void(StreamCreateData)>;
+    using type_signal_stream_server_update = sigc::signal<void(StreamServerUpdateData)>;
+    using type_signal_stream_delete = sigc::signal<void(StreamDeleteData)>;
 #endif
 
     using type_signal_voice_user_disconnect = sigc::signal<void(Snowflake, Snowflake)>;
@@ -562,6 +581,9 @@ public:
     type_signal_voice_requested_disconnect signal_voice_requested_disconnect();
     type_signal_voice_client_state_update signal_voice_client_state_update();
     type_signal_voice_channel_changed signal_voice_channel_changed();
+    type_signal_stream_create signal_stream_create();
+    type_signal_stream_server_update signal_stream_server_update();
+    type_signal_stream_delete signal_stream_delete();
 #endif
 
     type_signal_voice_user_disconnect signal_voice_user_disconnect();
@@ -636,6 +658,9 @@ protected:
     type_signal_voice_requested_disconnect m_signal_voice_requested_disconnect;
     type_signal_voice_client_state_update m_signal_voice_client_state_update;
     type_signal_voice_channel_changed m_signal_voice_channel_changed;
+    type_signal_stream_create m_signal_stream_create;
+    type_signal_stream_server_update m_signal_stream_server_update;
+    type_signal_stream_delete m_signal_stream_delete;
 #endif
 
     type_signal_voice_user_disconnect m_signal_voice_user_disconnect;

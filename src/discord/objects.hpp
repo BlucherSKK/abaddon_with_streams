@@ -114,6 +114,9 @@ enum class GatewayEvent : int {
     STAGE_INSTANCE_CREATE,
     STAGE_INSTANCE_UPDATE,
     STAGE_INSTANCE_DELETE,
+    STREAM_CREATE,
+    STREAM_SERVER_UPDATE,
+    STREAM_DELETE,
 };
 
 enum class GatewayCloseCode : uint16_t {
@@ -967,5 +970,57 @@ struct ModifyCurrentUserVoiceStateObject {
     std::optional<std::string> RequestToSpeakTimestamp;
 
     friend void to_json(nlohmann::json &j, const ModifyCurrentUserVoiceStateObject &m);
+};
+
+struct StreamCreateMessage {
+    std::string Type = "guild";
+    std::optional<Snowflake> GuildID;
+    Snowflake ChannelID;
+    std::optional<std::string> PreferredRegion;
+
+    friend void to_json(nlohmann::json &j, const StreamCreateMessage &m);
+};
+
+struct StreamDeleteMessage {
+    std::string StreamKey;
+
+    friend void to_json(nlohmann::json &j, const StreamDeleteMessage &m);
+};
+
+struct StreamWatchMessage {
+    std::string StreamKey;
+
+    friend void to_json(nlohmann::json &j, const StreamWatchMessage &m);
+};
+
+struct StreamSetPausedMessage {
+    std::string StreamKey;
+    bool Paused = false;
+
+    friend void to_json(nlohmann::json &j, const StreamSetPausedMessage &m);
+};
+
+struct StreamCreateData {
+    std::string StreamKey;
+    std::optional<bool> Paused;
+    std::optional<std::string> Region;
+    std::vector<Snowflake> ViewerIDs;
+
+    friend void from_json(const nlohmann::json &j, StreamCreateData &m);
+};
+
+struct StreamServerUpdateData {
+    std::string StreamKey;
+    std::string Endpoint;
+    std::string Token;
+
+    friend void from_json(const nlohmann::json &j, StreamServerUpdateData &m);
+};
+
+struct StreamDeleteData {
+    std::string StreamKey;
+    std::optional<std::string> Reason;
+
+    friend void from_json(const nlohmann::json &j, StreamDeleteData &m);
 };
 #endif

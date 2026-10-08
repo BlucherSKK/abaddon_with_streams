@@ -1755,6 +1755,15 @@ void DiscordClient::HandleGatewayMessage(std::string str) {
                     case GatewayEvent::CALL_CREATE: {
                         HandleGatewayCallCreate(m);
                     } break;
+                    case GatewayEvent::STREAM_CREATE: {
+                        HandleGatewayStreamCreate(m);
+                    } break;
+                    case GatewayEvent::STREAM_SERVER_UPDATE: {
+                        HandleGatewayStreamServerUpdate(m);
+                    } break;
+                    case GatewayEvent::STREAM_DELETE: {
+                        HandleGatewayStreamDelete(m);
+                    } break;
 #endif
                 }
             } break;
@@ -3069,6 +3078,8 @@ void DiscordClient::OnVoiceConnected() {
 }
 
 void DiscordClient::OnVoiceDisconnected() {
+    m_is_streaming = false;
+    m_current_stream_key.clear();
     m_signal_voice_disconnected.emit();
 }
 #endif
@@ -3154,6 +3165,9 @@ void DiscordClient::LoadEventMap() {
     m_event_map["STAGE_INSTANCE_CREATE"] = GatewayEvent::STAGE_INSTANCE_CREATE;
     m_event_map["STAGE_INSTANCE_UPDATE"] = GatewayEvent::STAGE_INSTANCE_UPDATE;
     m_event_map["STAGE_INSTANCE_DELETE"] = GatewayEvent::STAGE_INSTANCE_DELETE;
+    m_event_map["STREAM_CREATE"] = GatewayEvent::STREAM_CREATE;
+    m_event_map["STREAM_SERVER_UPDATE"] = GatewayEvent::STREAM_SERVER_UPDATE;
+    m_event_map["STREAM_DELETE"] = GatewayEvent::STREAM_DELETE;
 }
 
 DiscordClient::type_signal_gateway_ready DiscordClient::signal_gateway_ready() {
@@ -3408,6 +3422,101 @@ DiscordClient::type_signal_voice_client_state_update DiscordClient::signal_voice
 DiscordClient::type_signal_voice_channel_changed DiscordClient::signal_voice_channel_changed() {
     return m_signal_voice_channel_changed;
 }
+
+void DiscordClient::HandleGatewayStreamCreate(const GatewayMessage &msg) {
+    StreamCreateData data = msg.Data;
+    spdlog::get("discord")->info("STREAM_CREATE: stream_key={}", data.StreamKey);
+    m_signal_stream_create.emit(data);
+}
+
+void DiscordClient::HandleGatewayStreamServerUpdate(const GatewayMessage &msg) {
+    StreamServerUpdateData data = msg.Data;
+    spdlog::get("discord")->info("STREAM_SERVER_UPDATE: stream_key={}, endpoint={}", data.StreamKey, data.Endpoint);
+    m_signal_stream_server_update.emit(data);
+}
+
+void DiscordClient::HandleGatewayStreamDelete(const GatewayMessage &msg) {
+    StreamDeleteData data = msg.Data;
+    spdlog::get("discord")->info("STREAM_DELETE: stream_key={}", data.StreamKey);
+    if (data.StreamKey == m_current_stream_key) {
+        m_is_streaming = false;
+        m_current_stream_key.clear();
+    }
+    m_signal_stream_delete.emit(data);
+}
+
+void DiscordClient::StartStream(Snowflake channel_id) {
+    if (!m_client_connected) return;
+    const auto chan = GetChannel(channel_id);
+    StreamCreateMessage msg;
+    msg.ChannelID = channel_id;
+    if (chan.has_value() && chan->GuildID.has_value()) {
+        msg.Type = "guild";
+        msg.GuildID = *chan->GuildID;
+    } else {
+        msg.Type = "call";
+    }
+    m_current_stream_key = MakeStreamKey(channel_id, m_user_data.ID);
+    m_is_streaming = true;
+    m_websocket.Send(msg);
+}
+
+void DiscordClient::StopStream() {
+    if (!m_client_connected) return;
+    if (m_current_stream_key.empty() && m_voice_channel_id.IsValid()) {
+        m_current_stream_key = MakeStreamKey(m_voice_channel_id, m_user_data.ID);
+    }
+    if (!m_current_stream_key.empty()) {
+        StreamDeleteMessage msg;
+        msg.StreamKey = m_current_stream_key;
+        m_websocket.Send(msg);
+    }
+    m_is_streaming = false;
+    m_current_stream_key.clear();
+}
+
+void DiscordClient::WatchStream(const std::string &stream_key) {
+    if (!m_client_connected || stream_key.empty()) return;
+    StreamWatchMessage msg;
+    msg.StreamKey = stream_key;
+    m_websocket.Send(msg);
+}
+
+void DiscordClient::SetStreamPaused(bool paused) {
+    if (!m_client_connected || m_current_stream_key.empty()) return;
+    StreamSetPausedMessage msg;
+    msg.StreamKey = m_current_stream_key;
+    msg.Paused = paused;
+    m_websocket.Send(msg);
+}
+
+bool DiscordClient::IsStreaming() const noexcept {
+    return m_is_streaming;
+}
+
+std::string DiscordClient::GetCurrentStreamKey() const {
+    return m_current_stream_key;
+}
+
+std::string DiscordClient::MakeStreamKey(Snowflake channel_id, Snowflake user_id) const {
+    const auto chan = GetChannel(channel_id);
+    if (chan.has_value() && chan->GuildID.has_value()) {
+        return "guild:" + std::to_string(*chan->GuildID) + ":" + std::to_string(channel_id) + ":" + std::to_string(user_id);
+    }
+    return "call:" + std::to_string(channel_id) + ":" + std::to_string(user_id);
+}
+
+DiscordClient::type_signal_stream_create DiscordClient::signal_stream_create() {
+    return m_signal_stream_create;
+}
+
+DiscordClient::type_signal_stream_server_update DiscordClient::signal_stream_server_update() {
+    return m_signal_stream_server_update;
+}
+
+DiscordClient::type_signal_stream_delete DiscordClient::signal_stream_delete() {
+    return m_signal_stream_delete;
+}
 #endif
 
 DiscordClient::type_signal_voice_user_disconnect DiscordClient::signal_voice_user_disconnect() {
@@ -3421,7 +3530,11 @@ DiscordClient::type_signal_voice_user_connect DiscordClient::signal_voice_user_c
 DiscordClient::type_signal_voice_state_set DiscordClient::signal_voice_state_set() {
     return m_signal_voice_state_set;
 }
-
 DiscordClient::type_signal_voice_speaker_state_changed DiscordClient::signal_voice_speaker_state_changed() {
     return m_signal_voice_speaker_state_changed;
+}
+
+bool DiscordClient::IsUserStreaming(Snowflake user_id) const {
+    const auto state = GetVoiceState(user_id);
+    return state.has_value() && util::FlagSet(state->second.Flags, VoiceStateFlags::SelfStream);
 }

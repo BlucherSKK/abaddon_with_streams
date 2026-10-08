@@ -5,6 +5,7 @@
 #include "discord/snowflake.hpp"
 
 #include <gtkmm/box.h>
+#include <gtkmm/button.h>
 #include <gtkmm/checkbutton.h>
 #include <gtkmm/label.h>
 #include <gtkmm/listboxrow.h>
@@ -16,12 +17,15 @@ public:
 
     void SetVolumeMeter(double frac);
     void RestoreGain(double frac);
+    void SetStreaming(bool is_streaming);
 
 private:
+    Snowflake m_id;
     Gtk::Box m_main;
     Gtk::Box m_horz;
     LazyImage m_avatar;
     Gtk::Label m_name;
+    Gtk::Button m_stream_btn;
     Gtk::CheckButton m_mute;
     Gtk::Scale m_volume;
     VolumeMeter m_meter;

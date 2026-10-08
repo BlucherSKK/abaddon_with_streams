@@ -12,12 +12,15 @@ public:
     ActivityType GetActivityType() const;
     PresenceStatus GetStatusType() const;
     std::string GetActivityName() const;
+    std::string GetStreamURL() const;
 
 private:
     Gtk::Box m_layout;
     Gtk::Entry m_text;
     Gtk::ComboBoxText m_status_combo;
     Gtk::ComboBoxText m_type_combo;
+    Gtk::Label m_stream_url_label;
+    Gtk::Entry m_stream_url;
 
     Gtk::Button m_ok;
     Gtk::Button m_cancel;

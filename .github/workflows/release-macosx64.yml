@@ -1,0 +1,90 @@
+name: Release macOS x64
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release macOS x64
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Determine next release tag
+        id: next_tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LATEST_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || true)
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+            LATEST_TAG=$(git tag -l --sort=-v:refname | head -n 1 2>/dev/null || true)
+          fi
+          echo "Previous release tag: '${LATEST_TAG}'"
+
+          TAG=$(python3 -c "
+          import sys
+          raw = '''$LATEST_TAG'''.strip()
+          if not raw or raw == 'null':
+              print('0.0.1')
+              sys.exit(0)
+
+          clean = raw.lstrip('v')
+          parts = clean.split('.')
+          while len(parts) < 3:
+              parts.append('0')
+
+          try:
+              parts[-1] = str(int(parts[-1]) + 1)
+              print('.'.join(parts))
+          except ValueError:
+              print('0.0.1')
+          ")
+          echo "Computed tag: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: |
+          brew install pkg-config gtkmm3 nlohmann-json jpeg opus libsodium spdlog libhandy openssl@3
+
+      - name: Build Abaddon (macosx64)
+        run: |
+          cmake -Bbuild \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
+          cmake --build build -j$(sysctl -n hw.ncpu)
+
+      - name: Prepare release packages
+        run: |
+          TAG="${{ steps.next_tag.outputs.tag }}"
+          PACKAGE_DIR="abaddon-macosx64-${TAG}"
+          mkdir -p "$PACKAGE_DIR"
+          cp build/abaddon "$PACKAGE_DIR/abaddon"
+          cp -r res/css "$PACKAGE_DIR/css"
+          cp -r res/res "$PACKAGE_DIR/res"
+          if [ -d res/fonts ]; then
+            cp -r res/fonts "$PACKAGE_DIR/fonts"
+          fi
+          tar -czvf "abaddon-macosx64-${TAG}.tar.gz" "$PACKAGE_DIR"
+          zip -r "abaddon-macosx64-${TAG}.zip" "$PACKAGE_DIR"
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.next_tag.outputs.tag }}"
+          gh release create "$TAG" \
+            "abaddon-macosx64-${TAG}.tar.gz" \
+            "abaddon-macosx64-${TAG}.zip" \
+            --title "$TAG" \
+            --notes "Release $TAG for macOS x64 (macosx64)"

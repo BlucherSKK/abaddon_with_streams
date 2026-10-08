@@ -1037,6 +1037,12 @@ void Abaddon::ActionSetStatus() {
         ActivityData activity;
         activity.Name = activity_name;
         activity.Type = activity_type;
+        if (activity_type == ActivityType::Streaming) {
+            const auto stream_url = dlg.GetStreamURL();
+            if (!stream_url.empty()) {
+                activity.URL = stream_url;
+            }
+        }
         m_discord.UpdateStatus(status, false, activity);
     }
 }

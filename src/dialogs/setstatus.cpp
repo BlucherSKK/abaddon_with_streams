@@ -58,6 +58,21 @@ SetStatusDialog::SetStatusDialog(Gtk::Window &parent)
     m_layout.pack_start(*Gtk::make_managed<Gtk::Label>("Activity", Gtk::ALIGN_START));
     m_layout.pack_start(m_type_combo);
 
+    m_stream_url_label.set_text("Stream URL (Twitch/YouTube)");
+    m_stream_url_label.set_halign(Gtk::ALIGN_START);
+    m_stream_url.set_placeholder_text("https://twitch.tv/username");
+    m_stream_url_label.set_no_show_all(true);
+    m_stream_url.set_no_show_all(true);
+
+    m_layout.pack_start(m_stream_url_label);
+    m_layout.pack_start(m_stream_url);
+
+    m_type_combo.signal_changed().connect([this]() {
+        const bool is_streaming = (GetActivityType() == ActivityType::Streaming);
+        m_stream_url_label.set_visible(is_streaming);
+        m_stream_url.set_visible(is_streaming);
+    });
+
     get_content_area()->add(m_layout);
     get_action_area()->pack_start(m_ok, Gtk::PACK_SHRINK);
     get_action_area()->pack_start(m_cancel, Gtk::PACK_SHRINK);
@@ -86,4 +101,8 @@ PresenceStatus SetStatusDialog::GetStatusType() const {
 
 std::string SetStatusDialog::GetActivityName() const {
     return m_text.get_text();
+}
+
+std::string SetStatusDialog::GetStreamURL() const {
+    return m_stream_url.get_text();
 }
