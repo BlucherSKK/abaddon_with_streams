@@ -21,7 +21,71 @@ let activeStreams = new Map(); // stream_key -> streamData
 let selectedStreamKey = null;
 let channelVoiceUsers = new Map(); // channel_id -> Set of userIds / user objects
 let currentGuildVoiceStates = new Map(); // user_id -> VoiceState
+let cachedUsers = new Map(); // user_id -> User
+const pendingUserFetches = new Set();
 let stageViewActive = false;
+
+function resolveUser(userId, member) {
+  if (member && member.user && member.user.username && member.user.username !== "User") {
+    cachedUsers.set(userId, member.user);
+    return member.user;
+  }
+  if (cachedUsers.has(userId)) {
+    return cachedUsers.get(userId);
+  }
+  fetchAndCacheUser(userId);
+  return { id: userId, username: member?.nick || "User", avatar: null };
+}
+
+async function fetchAndCacheUser(userId) {
+  if (!userId || pendingUserFetches.has(userId) || cachedUsers.has(userId)) return;
+  pendingUserFetches.add(userId);
+  try {
+    const user = await invoke("get_user", { userId });
+    if (user && user.id) {
+      cachedUsers.set(user.id, user);
+      const row = document.getElementById(`voice-user-${user.id}`);
+      if (row) {
+        const name = user.global_name || user.username || "User";
+        const avatarUrl = user.avatar
+          ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=32`
+          : null;
+        const avatarWrap = row.querySelector(".voice-user-avatar-wrap");
+        if (avatarWrap) {
+          avatarWrap.innerHTML = avatarUrl
+            ? `<img src="${avatarUrl}" class="voice-avatar" alt="${escapeHtml(name)}">`
+            : `<div class="voice-avatar-placeholder">${escapeHtml(name.charAt(0).toUpperCase())}</div>`;
+        }
+        const nameSpan = row.querySelector(".voice-user-name");
+        if (nameSpan) {
+          nameSpan.innerText = name;
+        }
+      }
+      const card = document.getElementById(`participant-${user.id}`);
+      if (card) {
+        const name = user.global_name || user.username || "User";
+        const avatarUrl = user.avatar
+          ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128`
+          : null;
+        const avatarEl = card.querySelector(".participant-avatar");
+        if (avatarEl) {
+          avatarEl.innerHTML = avatarUrl
+            ? `<img src="${avatarUrl}" alt="${escapeHtml(name)}">`
+            : `<div class="avatar-placeholder">${escapeHtml(name.charAt(0).toUpperCase())}</div>`;
+        }
+        const nameEl = card.querySelector(".participant-name");
+        if (nameEl) {
+          const isSelf = currentUser && user.id === currentUser.id;
+          nameEl.innerText = `${name}${isSelf ? " (You)" : ""}`;
+        }
+      }
+    }
+  } catch (err) {
+    // Silently ignore or warn
+  } finally {
+    pendingUserFetches.delete(userId);
+  }
+}
 
 // DOM Elements
 const loginModal = document.getElementById("login-modal");
@@ -181,6 +245,11 @@ async function setupGatewayListeners() {
 
   await listen("discord-ready", async (event) => {
     console.log("Gateway READY:", event.payload);
+    if (event.payload && Array.isArray(event.payload.users)) {
+      for (const u of event.payload.users) {
+        cachedUsers.set(u.id, u);
+      }
+    }
     if (!currentGuildId) {
       await loadDms();
     }
@@ -204,6 +273,11 @@ async function setupGatewayListeners() {
 
   await listen("discord-guild-create", async (event) => {
     const guild = event.payload;
+    if (guild && Array.isArray(guild.members)) {
+      for (const m of guild.members) {
+        if (m.user) cachedUsers.set(m.user.id, m.user);
+      }
+    }
     if (currentGuildId && guild.id === currentGuildId) {
       if (guild.channels && guild.channels.length > 0) {
         currentChannels = guild.channels;
@@ -224,6 +298,9 @@ async function setupGatewayListeners() {
 
   await listen("discord-message-create", (event) => {
     const msg = event.payload;
+    if (msg.author) {
+      cachedUsers.set(msg.author.id, msg.author);
+    }
     if (msg.channel_id === currentChannelId) {
       appendMessage(msg);
       messagesList.scrollTop = messagesList.scrollHeight;
@@ -720,7 +797,7 @@ async function joinVoiceChannel(channel) {
     const added = new Set();
     if (states && states.length > 0) {
       for (const st of states) {
-        const u = (st.member && st.member.user) || { id: st.user_id, username: st.member?.nick || "User" };
+        const u = resolveUser(st.user_id, st.member);
         const isSelf = currentUser && u.id === currentUser.id;
         addParticipantToGrid(u, Boolean(st.self_stream), st, isSelf);
         added.add(u.id);
@@ -729,7 +806,7 @@ async function joinVoiceChannel(channel) {
 
     for (const st of currentGuildVoiceStates.values()) {
       if (st.channel_id === channel.id && !added.has(st.user_id)) {
-        const u = (st.member && st.member.user) || { id: st.user_id, username: st.member?.nick || "User" };
+        const u = resolveUser(st.user_id, st.member);
         const isSelf = currentUser && u.id === currentUser.id;
         addParticipantToGrid(u, Boolean(st.self_stream), st, isSelf);
         added.add(u.id);
@@ -798,7 +875,7 @@ function updateVoiceSidebarUsers() {
 
 function createVoiceUserRow(st) {
   const member = st.member;
-  const user = (member && member.user) || { id: st.user_id, username: member?.nick || "User" };
+  const user = resolveUser(st.user_id, member);
   const name = member?.nick || user.global_name || user.username || "User";
   const avatarUrl = user.avatar
     ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=32`
@@ -833,6 +910,9 @@ function createVoiceUserRow(st) {
 }
 
 function handleVoiceStateUpdate(state) {
+  if (state.member && state.member.user) {
+    cachedUsers.set(state.user_id, state.member.user);
+  }
   if (!state.channel_id) {
     currentGuildVoiceStates.delete(state.user_id);
   } else {
@@ -843,7 +923,7 @@ function handleVoiceStateUpdate(state) {
 
   if (activeVoiceChannelId) {
     if (state.channel_id === activeVoiceChannelId) {
-      const u = (state.member && state.member.user) || { id: state.user_id, username: state.member?.nick || "User" };
+      const u = resolveUser(state.user_id, state.member);
       const isSelf = currentUser && u.id === currentUser.id;
       addParticipantToGrid(u, Boolean(state.self_stream), state, isSelf);
     } else {
@@ -853,10 +933,12 @@ function handleVoiceStateUpdate(state) {
 }
 
 function addParticipantToGrid(user, isStreamActive, voiceState, isSelf) {
+  const resolved = resolveUser(user.id, voiceState?.member);
   let card = document.getElementById(`participant-${user.id}`);
-  const name = voiceState?.member?.nick || user.global_name || user.username || "User";
-  const avatarUrl = user.avatar
-    ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128`
+  const name = voiceState?.member?.nick || resolved.global_name || resolved.username || user.global_name || user.username || "User";
+  const avatar = resolved.avatar || user.avatar;
+  const avatarUrl = avatar
+    ? `https://cdn.discordapp.com/avatars/${user.id}/${avatar}.png?size=128`
     : null;
 
   const isMuted = voiceState ? Boolean(voiceState.mute || voiceState.self_mute) : false;

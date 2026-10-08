@@ -33,6 +33,7 @@ pub fn run() {
             set_presence,
             get_guild_voice_states,
             get_channel_voice_states,
+            get_user,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

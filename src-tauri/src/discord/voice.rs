@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::protocol::Message as WsMessage;
 
@@ -16,6 +16,8 @@ pub struct VoiceGatewayPayload {
     pub op: u8,
     #[serde(default)]
     pub d: serde_json::Value,
+    #[serde(default)]
+    pub seq: Option<i64>,
 }
 
 pub struct VoiceGatewayClient {
@@ -33,6 +35,7 @@ impl VoiceGatewayClient {
         endpoint: String,
         token: String,
         server_id: String,
+        channel_id: String,
         user_id: String,
         session_id: String,
         app_handle: AppHandle,
@@ -46,6 +49,7 @@ impl VoiceGatewayClient {
                 endpoint,
                 token,
                 server_id,
+                channel_id,
                 user_id,
                 session_id,
                 app_handle,
@@ -71,6 +75,7 @@ async fn run_voice_loop(
     endpoint: String,
     token: String,
     server_id: String,
+    channel_id: String,
     user_id: String,
     session_id: String,
     app_handle: AppHandle,
@@ -79,7 +84,7 @@ async fn run_voice_loop(
 ) -> Result<()> {
     // Discord voice endpoint might contain port, e.g. "eu-central.discord.media:443"
     let clean_endpoint = endpoint.trim_end_matches(":443");
-    let ws_url = format!("wss://{}/?v=8", clean_endpoint);
+    let ws_url = format!("wss://{}/?v=9", clean_endpoint);
     info!("Connecting to Discord Voice Gateway at {}", ws_url);
 
     let (ws_stream, _) = connect_async(&ws_url).await?;
@@ -105,6 +110,7 @@ async fn run_voice_loop(
     });
 
     let ssrc = Arc::new(Mutex::new(0u32));
+    let seq_ack = Arc::new(RwLock::new(-1i64));
 
     loop {
         tokio::select! {
@@ -134,6 +140,11 @@ async fn run_voice_loop(
                 match msg {
                     Some(Ok(WsMessage::Text(text))) => {
                         if let Ok(payload) = serde_json::from_str::<VoiceGatewayPayload>(&text) {
+                            if let Some(s) = payload.seq {
+                                let mut seq_guard = seq_ack.write().await;
+                                *seq_guard = s;
+                            }
+
                             match payload.op {
                                 8 => {
                                     // HELLO
@@ -141,14 +152,19 @@ async fn run_voice_loop(
                                         info!("Voice Gateway HELLO: heartbeat interval = {}ms", interval_ms);
                                         let hb_tx = send_tx.clone();
                                         let hb_running = is_running.clone();
+                                        let hb_seq_ack = seq_ack.clone();
 
                                         tokio::spawn(async move {
                                             let mut interval = tokio::time::interval(Duration::from_millis(interval_ms));
                                             while hb_running.load(Ordering::Relaxed) {
                                                 interval.tick().await;
+                                                let last_seq = *hb_seq_ack.read().await;
                                                 let hb = json!({
                                                     "op": 3,
-                                                    "d": chrono::Utc::now().timestamp_millis()
+                                                    "d": {
+                                                        "t": chrono::Utc::now().timestamp_millis(),
+                                                        "seq_ack": last_seq
+                                                    }
                                                 });
                                                 if hb_tx.send(WsMessage::Text(hb.to_string())).await.is_err() {
                                                     break;
@@ -157,11 +173,12 @@ async fn run_voice_loop(
                                         });
                                     }
 
-                                    // Send IDENTIFY (Op 0) with DAVE protocol support
+                                    // Send IDENTIFY (Op 0) with channel_id and DAVE protocol support
                                     let identify = json!({
                                         "op": 0,
                                         "d": {
                                             "server_id": server_id,
+                                            "channel_id": channel_id,
                                             "user_id": user_id,
                                             "session_id": session_id,
                                             "token": token,
@@ -263,6 +280,19 @@ async fn run_voice_loop(
                                     }
 
                                     // Select protocol (Op 1)
+                                    let chosen_mode = if let Some(modes) = payload.d.get("modes").and_then(|v| v.as_array()) {
+                                        let mode_strs: Vec<&str> = modes.iter().filter_map(|m| m.as_str()).collect();
+                                        if mode_strs.contains(&"aead_xchacha20_poly1305_rtpsize") {
+                                            "aead_xchacha20_poly1305_rtpsize"
+                                        } else if mode_strs.contains(&"aead_aes256_gcm_rtpsize") {
+                                            "aead_aes256_gcm_rtpsize"
+                                        } else {
+                                            mode_strs.first().copied().unwrap_or("aead_xchacha20_poly1305_rtpsize")
+                                        }
+                                    } else {
+                                        "aead_xchacha20_poly1305_rtpsize"
+                                    };
+
                                     let select_proto = json!({
                                         "op": 1,
                                         "d": {
@@ -270,14 +300,23 @@ async fn run_voice_loop(
                                             "data": {
                                                 "address": client_ip,
                                                 "port": client_port,
-                                                "mode": "aead_xchacha20_poly1305_rtpsize"
-                                            },
-                                            "address": client_ip,
-                                            "port": client_port,
-                                            "mode": "aead_xchacha20_poly1305_rtpsize"
+                                                "mode": chosen_mode
+                                            }
                                         }
                                     });
                                     let _ = send_tx.send(WsMessage::Text(select_proto.to_string())).await;
+                                }
+                                3 => {
+                                    // Server requested heartbeat
+                                    let last_seq = *seq_ack.read().await;
+                                    let hb = json!({
+                                        "op": 3,
+                                        "d": {
+                                            "t": chrono::Utc::now().timestamp_millis(),
+                                            "seq_ack": last_seq
+                                        }
+                                    });
+                                    let _ = send_tx.send(WsMessage::Text(hb.to_string())).await;
                                 }
                                 4 => {
                                     // SESSION_DESCRIPTION
@@ -299,6 +338,10 @@ async fn run_voice_loop(
                                 5 => {
                                     // SPEAKING
                                     let _ = app_handle.emit("discord-voice-speaking", &payload.d);
+                                }
+                                6 => {
+                                    // HEARTBEAT ACK
+                                    log::trace!("Voice Gateway heartbeat ACK received");
                                 }
                                 11 => {
                                     // CLIENT_CONNECT
@@ -330,6 +373,15 @@ async fn run_voice_loop(
                                 24 => {
                                     // DAVE Prepare Epoch
                                     info!("Voice Gateway DAVE Prepare Epoch: {:?}", payload.d);
+                                    if let Some(transition_id) = payload.d.get("transition_id").and_then(|v| v.as_i64()) {
+                                        let ready_transition = json!({
+                                            "op": 23,
+                                            "d": {
+                                                "transition_id": transition_id
+                                            }
+                                        });
+                                        let _ = send_tx.send(WsMessage::Text(ready_transition.to_string())).await;
+                                    }
                                 }
                                 _ => {}
                             }

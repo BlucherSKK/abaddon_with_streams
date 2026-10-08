@@ -70,6 +70,25 @@ impl DiscordRestClient {
         Ok(user)
     }
 
+    pub async fn get_user(&self, user_id: &str) -> Result<User> {
+        let token = self.auth_header().await?;
+        let res = self
+            .client
+            .get(format!("{}/users/{}", BASE_URL, user_id))
+            .header(AUTHORIZATION, &token)
+            .send()
+            .await?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let text = res.text().await.unwrap_or_default();
+            return Err(anyhow!("Failed to fetch user (status {}): {}", status, text));
+        }
+
+        let user: User = res.json().await?;
+        Ok(user)
+    }
+
     pub async fn get_guilds(&self) -> Result<Vec<Guild>> {
         let token = self.auth_header().await?;
         let res = self

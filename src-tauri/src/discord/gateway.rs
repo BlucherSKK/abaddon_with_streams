@@ -1,4 +1,4 @@
-use crate::discord::models::{Channel, VoiceState};
+use crate::discord::models::{Channel, User, VoiceState};
 use crate::discord::voice::VoiceGatewayClient;
 use crate::state::AppState;
 use anyhow::{anyhow, Result};
@@ -330,6 +330,29 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
             let data_clone = data.clone();
             tokio::spawn(async move {
                 let state = app_clone.state::<AppState>();
+                if let Some(users_json) = data_clone.get("users") {
+                    if let Ok(users) = serde_json::from_value::<Vec<User>>(users_json.clone()) {
+                        info!("READY: loaded {} cached users", users.len());
+                        state.store_users(users).await;
+                    }
+                }
+                if let Some(merged) = data_clone.get("merged_members").and_then(|v| v.as_array()) {
+                    let mut users_to_cache = Vec::new();
+                    for guild_members in merged {
+                        if let Some(members_arr) = guild_members.as_array() {
+                            for m in members_arr {
+                                if let Some(u_json) = m.get("user") {
+                                    if let Ok(u) = serde_json::from_value::<User>(u_json.clone()) {
+                                        users_to_cache.push(u);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if !users_to_cache.is_empty() {
+                        state.store_users(users_to_cache).await;
+                    }
+                }
                 if let Some(private_channels) = data_clone.get("private_channels") {
                     if let Ok(dms) = serde_json::from_value::<Vec<Channel>>(private_channels.clone()) {
                         state.store_dm_channels(dms).await;
@@ -366,6 +389,23 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
             let data_clone = data.clone();
             tokio::spawn(async move {
                 let state = app_clone.state::<AppState>();
+                if let Some(merged) = data_clone.get("merged_members").and_then(|v| v.as_array()) {
+                    let mut users_to_cache = Vec::new();
+                    for guild_members in merged {
+                        if let Some(members_arr) = guild_members.as_array() {
+                            for m in members_arr {
+                                if let Some(u_json) = m.get("user") {
+                                    if let Ok(u) = serde_json::from_value::<User>(u_json.clone()) {
+                                        users_to_cache.push(u);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if !users_to_cache.is_empty() {
+                        state.store_users(users_to_cache).await;
+                    }
+                }
                 if let Some(guilds) = data_clone.get("guilds").and_then(|v| v.as_array()) {
                     for g in guilds {
                         if let Some(gid) = g.get("id").and_then(|v| v.as_str()) {
@@ -388,6 +428,15 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
             let _ = app.emit("discord-ready-supplemental", data);
         }
         "MESSAGE_CREATE" => {
+            if let Some(author_json) = data.get("author") {
+                if let Ok(author) = serde_json::from_value::<User>(author_json.clone()) {
+                    let app_clone = app.clone();
+                    tokio::spawn(async move {
+                        let state = app_clone.state::<AppState>();
+                        state.store_user(author).await;
+                    });
+                }
+            }
             let _ = app.emit("discord-message-create", data);
         }
         "MESSAGE_UPDATE" => {
@@ -433,6 +482,19 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
                 let data_clone = data.clone();
                 tokio::spawn(async move {
                     let state = app_clone.state::<AppState>();
+                    if let Some(members_json) = data_clone.get("members").and_then(|v| v.as_array()) {
+                        let mut users_to_cache = Vec::new();
+                        for m in members_json {
+                            if let Some(u_json) = m.get("user") {
+                                if let Ok(u) = serde_json::from_value::<User>(u_json.clone()) {
+                                    users_to_cache.push(u);
+                                }
+                            }
+                        }
+                        if !users_to_cache.is_empty() {
+                            state.store_users(users_to_cache).await;
+                        }
+                    }
                     if let Some(channels_json) = data_clone.get("channels") {
                         if let Ok(channels) = serde_json::from_value::<Vec<Channel>>(channels_json.clone()) {
                             state.store_guild_channels(gid.clone(), channels).await;
@@ -461,6 +523,13 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
                 let state_clone = vstate.clone();
                 tokio::spawn(async move {
                     let state = app_clone.state::<AppState>();
+                    if let Some(ref member_val) = state_clone.member {
+                        if let Some(u_val) = member_val.get("user") {
+                            if let Ok(u) = serde_json::from_value::<User>(u_val.clone()) {
+                                state.store_user(u).await;
+                            }
+                        }
+                    }
                     let my_id = {
                         let user_lock = state.current_user.read().await;
                         user_lock.as_ref().map(|u| u.id.clone())
@@ -477,10 +546,18 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
                                 *state.voice_session_id.write().await = None;
                                 *state.voice_server_endpoint.write().await = None;
                                 *state.voice_server_token.write().await = None;
+                                *state.active_voice_channel.write().await = None;
+                                *state.active_voice_guild.write().await = None;
                             } else if let Some(ref sess_id) = state_clone.session_id {
                                 *state.voice_session_id.write().await = Some(sess_id.clone());
+                                if let Some(ref cid) = state_clone.channel_id {
+                                    *state.active_voice_channel.write().await = Some(cid.clone());
+                                }
                                 if let Some(ref gid) = state_clone.guild_id {
+                                    *state.active_voice_guild.write().await = Some(gid.clone());
                                     maybe_start_voice_gateway(&app_clone, gid).await;
+                                } else if let Some(ref cid) = state_clone.channel_id {
+                                    maybe_start_voice_gateway(&app_clone, cid).await;
                                 }
                             }
                         }
@@ -497,13 +574,13 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
                 let state = app_clone.state::<AppState>();
                 let endpoint = data_clone.get("endpoint").and_then(|v| v.as_str()).map(|s| s.to_string());
                 let token = data_clone.get("token").and_then(|v| v.as_str()).map(|s| s.to_string());
-                let guild_id = data_clone.get("guild_id").and_then(|v| v.as_str()).map(|s| s.to_string())
+                let server_id = data_clone.get("guild_id").and_then(|v| v.as_str()).map(|s| s.to_string())
                     .or_else(|| data_clone.get("channel_id").and_then(|v| v.as_str()).map(|s| s.to_string()));
 
-                if let (Some(ep), Some(tok), Some(gid)) = (endpoint, token, guild_id) {
+                if let (Some(ep), Some(tok), Some(sid)) = (endpoint, token, server_id) {
                     *state.voice_server_endpoint.write().await = Some(ep);
                     *state.voice_server_token.write().await = Some(tok);
-                    maybe_start_voice_gateway(&app_clone, &gid).await;
+                    maybe_start_voice_gateway(&app_clone, &sid).await;
                 }
             });
             let _ = app.emit("discord-voice-server-update", data);
@@ -533,20 +610,21 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
     }
 }
 
-async fn maybe_start_voice_gateway(app: &AppHandle, guild_id: &str) {
+async fn maybe_start_voice_gateway(app: &AppHandle, server_id: &str) {
     let state = app.state::<AppState>();
     let session_id = state.voice_session_id.read().await.clone();
     let endpoint = state.voice_server_endpoint.read().await.clone();
     let token = state.voice_server_token.read().await.clone();
     let user_id = state.current_user.read().await.as_ref().map(|u| u.id.clone());
+    let channel_id = state.active_voice_channel.read().await.clone().unwrap_or_else(|| server_id.to_string());
 
     if let (Some(sess), Some(ep), Some(tok), Some(uid)) = (session_id, endpoint, token, user_id) {
         let mut vg_lock = state.voice_gateway.lock().await;
         if let Some(old) = vg_lock.take() {
             old.stop().await;
         }
-        info!("Starting Voice Gateway client for guild {} at {}", guild_id, ep);
-        let client = VoiceGatewayClient::start(ep, tok, guild_id.to_string(), uid, sess, app.clone());
+        info!("Starting Voice Gateway client for server {} (channel {}) at {}", server_id, channel_id, ep);
+        let client = VoiceGatewayClient::start(ep, tok, server_id.to_string(), channel_id, uid, sess, app.clone());
         *vg_lock = Some(client);
     }
 }

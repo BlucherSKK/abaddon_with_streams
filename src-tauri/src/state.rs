@@ -2,6 +2,7 @@ use crate::discord::{
     Channel, DiscordRestClient, GatewayClient, GatewayCommand, Guild, User, VoiceGatewayClient,
     VoiceState,
 };
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, RwLock};
@@ -105,8 +106,25 @@ impl AppState {
 
     pub async fn get_guild_voice_states(&self, guild_id: &str) -> Vec<VoiceState> {
         let lock = self.voice_states.read().await;
+        let users_lock = self.cached_users.read().await;
         if let Some(map) = lock.get(guild_id) {
-            map.values().cloned().collect()
+            map.values()
+                .cloned()
+                .map(|mut s| {
+                    if s.member.is_none()
+                        || s.member.as_ref().and_then(|m| m.get("user")).is_none()
+                    {
+                        if let Some(u) = users_lock.get(&s.user_id) {
+                            let nick = u.global_name.clone().unwrap_or_else(|| u.username.clone());
+                            s.member = Some(json!({
+                                "user": u,
+                                "nick": nick
+                            }));
+                        }
+                    }
+                    s
+                })
+                .collect()
         } else {
             Vec::new()
         }
@@ -114,11 +132,28 @@ impl AppState {
 
     pub async fn get_channel_voice_states(&self, channel_id: &str) -> Vec<VoiceState> {
         let lock = self.voice_states.read().await;
+        let users_lock = self.cached_users.read().await;
         let mut res = Vec::new();
         for map in lock.values() {
             for s in map.values() {
                 if s.channel_id.as_deref() == Some(channel_id) {
-                    res.push(s.clone());
+                    let mut s_clone = s.clone();
+                    if s_clone.member.is_none()
+                        || s_clone
+                            .member
+                            .as_ref()
+                            .and_then(|m| m.get("user"))
+                            .is_none()
+                    {
+                        if let Some(u) = users_lock.get(&s_clone.user_id) {
+                            let nick = u.global_name.clone().unwrap_or_else(|| u.username.clone());
+                            s_clone.member = Some(json!({
+                                "user": u,
+                                "nick": nick
+                            }));
+                        }
+                    }
+                    res.push(s_clone);
                 }
             }
         }
@@ -128,5 +163,17 @@ impl AppState {
     pub async fn store_user(&self, user: User) {
         let mut lock = self.cached_users.write().await;
         lock.insert(user.id.clone(), user);
+    }
+
+    pub async fn store_users(&self, users: Vec<User>) {
+        let mut lock = self.cached_users.write().await;
+        for u in users {
+            lock.insert(u.id.clone(), u);
+        }
+    }
+
+    pub async fn get_cached_user(&self, user_id: &str) -> Option<User> {
+        let lock = self.cached_users.read().await;
+        lock.get(user_id).cloned()
     }
 }

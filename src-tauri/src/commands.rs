@@ -172,6 +172,8 @@ pub async fn join_voice(
 
         let mut chan_lock = state.active_voice_channel.write().await;
         *chan_lock = Some(channel_id);
+        let mut guild_lock = state.active_voice_guild.write().await;
+        *guild_lock = guild_id;
         Ok(())
     } else {
         Err("Gateway not connected".to_string())
@@ -196,8 +198,13 @@ pub async fn leave_voice(
 
         let mut chan_lock = state.active_voice_channel.write().await;
         *chan_lock = None;
+        let mut guild_lock = state.active_voice_guild.write().await;
+        *guild_lock = None;
         let mut stream_lock = state.active_stream_key.write().await;
         *stream_lock = None;
+        *state.voice_session_id.write().await = None;
+        *state.voice_server_endpoint.write().await = None;
+        *state.voice_server_token.write().await = None;
         let mut vg_lock = state.voice_gateway.lock().await;
         if let Some(vg) = vg_lock.take() {
             vg.stop().await;
@@ -324,4 +331,21 @@ pub async fn get_channel_voice_states(
     state: State<'_, AppState>,
 ) -> Result<Vec<VoiceState>, String> {
     Ok(state.get_channel_voice_states(&channel_id).await)
+}
+
+#[tauri::command]
+pub async fn get_user(
+    user_id: String,
+    state: State<'_, AppState>,
+) -> Result<User, String> {
+    if let Some(cached) = state.get_cached_user(&user_id).await {
+        return Ok(cached);
+    }
+    match state.rest.get_user(&user_id).await {
+        Ok(user) => {
+            state.store_user(user.clone()).await;
+            Ok(user)
+        }
+        Err(e) => Err(format!("Failed to fetch user: {}", e)),
+    }
 }
