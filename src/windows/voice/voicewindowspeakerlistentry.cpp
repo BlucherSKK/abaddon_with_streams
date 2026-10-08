@@ -16,12 +16,7 @@ VoiceWindowSpeakerListEntry::VoiceWindowSpeakerListEntry(Snowflake id)
     m_stream_btn.set_tooltip_text("User is streaming. Click to watch");
     m_stream_btn.set_no_show_all(true);
     m_stream_btn.signal_clicked().connect([this]() {
-        auto &discord = Abaddon::Get().GetDiscordClient();
-        const auto channel_id = discord.GetVoiceChannelID();
-        if (channel_id.IsValid()) {
-            const auto stream_key = discord.MakeStreamKey(channel_id, m_id);
-            discord.WatchStream(stream_key);
-        }
+        m_signal_watch_stream.emit();
     });
 
     m_volume.set_range(0.0, 200.0);
@@ -81,4 +76,8 @@ VoiceWindowSpeakerListEntry::type_signal_mute_cs VoiceWindowSpeakerListEntry::si
 
 VoiceWindowSpeakerListEntry::type_signal_volume VoiceWindowSpeakerListEntry::signal_volume() {
     return m_signal_volume;
+}
+
+VoiceWindowSpeakerListEntry::type_signal_watch_stream VoiceWindowSpeakerListEntry::signal_watch_stream() {
+    return m_signal_watch_stream;
 }

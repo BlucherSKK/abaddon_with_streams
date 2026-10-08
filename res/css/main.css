@@ -192,3 +192,129 @@
 .classic-guild-list-guild box, .classic-guild-list-folder stack {
     padding-left: 10px;
 }
+
+/* Discord Voice Channel & Stream Stage UI */
+.discord-voice-window {
+    background-color: #1e1f22;
+    color: #dbdee1;
+}
+
+.discord-voice-header {
+    background-color: #2b2d31;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.discord-voice-title {
+    font-weight: bold;
+    font-size: 15px;
+    color: #f2f3f5;
+}
+
+.discord-voice-status {
+    font-size: 13px;
+    color: #949ba4;
+}
+
+.stream-switcher-bar {
+    background-color: #232428;
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.stream-card-btn {
+    border-radius: 8px;
+    padding: 4px 10px;
+    background-color: #2b2d31;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f2f3f5;
+}
+
+.stream-card-btn:hover {
+    background-color: #35373c;
+}
+
+.stream-card-btn.active {
+    border: 2px solid #5865f2;
+    background-color: #383a40;
+}
+
+.badge-live {
+    background-color: #f23f43;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.stream-exit-btn {
+    background-color: #f23f43;
+    color: #ffffff;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-weight: bold;
+}
+
+.stream-exit-btn:hover {
+    background-color: #da373c;
+}
+
+.stream-watch-btn {
+    background-color: #5865f2;
+    color: #ffffff;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.stream-watch-btn:hover {
+    background-color: #4752c4;
+}
+
+.participant-card {
+    background-color: #2b2d31;
+    border-radius: 12px;
+    padding: 12px;
+    border: 2px solid transparent;
+}
+
+.participant-card.speaking {
+    border: 2px solid #23a55a;
+}
+
+.participant-card.streaming {
+    border: 2px solid #f23f43;
+}
+
+.discord-voice-dock {
+    background-color: #2b2d31;
+    padding: 8px 16px;
+    border-radius: 12px;
+    margin: 8px 16px 12px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.discord-disconnect-btn {
+    background-color: #f23f43;
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 6px 16px;
+    font-weight: bold;
+}
+
+.discord-disconnect-btn:hover {
+    background-color: #da373c;
+}
+
+.voice-sidebar {
+    background-color: #2b2d31;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 8px;
+}
+
+.stream-player-bar {
+    background-color: #1e1f22;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}

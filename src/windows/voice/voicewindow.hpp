@@ -7,26 +7,42 @@
 #include "components/volumemeter.hpp"
 #include "discord/snowflake.hpp"
 #include <gtkmm/box.h>
+#include <gtkmm/button.h>
 #include <gtkmm/checkbutton.h>
 #include <gtkmm/comboboxtext.h>
+#include <gtkmm/drawingarea.h>
+#include <gtkmm/flowbox.h>
+#include <gtkmm/label.h>
 #include <gtkmm/listbox.h>
 #include <gtkmm/menubar.h>
+#include <gtkmm/paned.h>
 #include <gtkmm/progressbar.h>
 #include <gtkmm/scale.h>
 #include <gtkmm/scrolledwindow.h>
+#include <gtkmm/stack.h>
+#include <gtkmm/togglebutton.h>
 #include <gtkmm/window.h>
 #include <unordered_set>
 // clang-format on
 
+class VoiceParticipantCard;
+
 class VoiceWindow : public Gtk::Window {
 public:
     VoiceWindow(Snowflake channel_id);
+    ~VoiceWindow() override;
+
+    void SelectStream(Snowflake user_id);
+    void ExitStream();
 
 private:
     void SetUsers(const std::unordered_set<Snowflake> &user_ids);
 
     Gtk::ListBoxRow *CreateSpeakerRow(Snowflake id);
     Gtk::ListBoxRow *CreateAudienceRow(Snowflake id);
+
+    void AddParticipantCard(Snowflake id);
+    void RemoveParticipantCard(Snowflake id);
 
     void OnUserConnect(Snowflake user_id, Snowflake to_channel_id);
     void OnUserDisconnect(Snowflake user_id, Snowflake from_channel_id);
@@ -45,8 +61,52 @@ private:
     void UpdateStageCommand();
     void UpdateStageTopicLabel(const std::string &topic);
 
-    Gtk::Box m_main;
-    Gtk::Box m_controls;
+    void UpdateStreamSwitcher();
+    void UpdateParticipantGrid();
+    void UpdateHeader();
+    bool OnDrawStreamCanvas(const Cairo::RefPtr<Cairo::Context> &cr);
+
+    Snowflake m_active_stream_user;
+
+    // Root layout
+    Gtk::Box m_root_box;
+
+    // Header bar
+    Gtk::Box m_header_box;
+    Gtk::Label m_header_title;
+    Gtk::Label m_header_status;
+    Gtk::ToggleButton m_toggle_sidebar;
+
+    // Paned dividing main stage and sidebar
+    Gtk::Paned m_paned;
+
+    // Stage area
+    Gtk::Box m_stage_box;
+    Gtk::ScrolledWindow m_stream_bar_scroll;
+    Gtk::Box m_stream_switcher_box;
+
+    Gtk::Stack m_stage_stack;
+
+    // Stream player
+    Gtk::Box m_stream_player_box;
+    Gtk::DrawingArea m_stream_canvas;
+    Gtk::Box m_stream_player_overlay;
+    Gtk::Label m_player_title;
+    Gtk::Label m_player_status;
+    Gtk::Button m_player_exit_btn;
+
+    // Participant grid
+    Gtk::ScrolledWindow m_grid_scrolled;
+    Gtk::FlowBox m_grid_flowbox;
+    std::unordered_map<Snowflake, VoiceParticipantCard *> m_grid_cards;
+
+    // Sidebar
+    Gtk::ScrolledWindow m_sidebar_scroll;
+    Gtk::Box m_sidebar_box;
+
+    // Bottom voice dock
+    Gtk::Box m_voice_dock;
+    Gtk::Button m_dock_exit_stream_btn;
 
     Gtk::CheckButton m_mute;
     Gtk::CheckButton m_deafen;
@@ -57,18 +117,13 @@ private:
     Gtk::ListBox m_speakers_list;
     Gtk::ListBox m_audience_list;
 
-    // Shows volume for gate VAD method
-    // Shows probability for RNNoise VAD method
     VolumeMeter m_vad_value;
-    // Volume threshold for gate VAD method
-    // VAD probability threshold for RNNoise VAD method
     Gtk::Scale m_vad_param;
     Gtk::Scale m_capture_gain;
 
     Gtk::CheckButton m_noise_suppression;
     Gtk::CheckButton m_mix_mono;
 
-    Gtk::HBox m_buttons;
     Gtk::Button m_disconnect;
     Gtk::Button m_stage_command;
 

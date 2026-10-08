@@ -33,10 +33,13 @@ private:
 public:
     using type_signal_mute_cs = sigc::signal<void(bool)>;
     using type_signal_volume = sigc::signal<void(double)>;
+    using type_signal_watch_stream = sigc::signal<void()>;
     type_signal_mute_cs signal_mute_cs();
     type_signal_volume signal_volume();
+    type_signal_watch_stream signal_watch_stream();
 
 private:
     type_signal_mute_cs m_signal_mute_cs;
     type_signal_volume m_signal_volume;
+    type_signal_watch_stream m_signal_watch_stream;
 };
