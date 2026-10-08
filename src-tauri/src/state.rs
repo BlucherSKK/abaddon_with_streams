@@ -67,14 +67,28 @@ impl AppState {
 
     pub async fn store_guild_voice_states(&self, guild_id: String, states: Vec<VoiceState>) {
         let mut lock = self.voice_states.write().await;
-        let map = lock.entry(guild_id).or_insert_with(HashMap::new);
-        for s in states {
+        let map = lock.entry(guild_id.clone()).or_insert_with(HashMap::new);
+        for mut s in states {
+            if s.guild_id.is_none() {
+                s.guild_id = Some(guild_id.clone());
+            }
             map.insert(s.user_id.clone(), s);
         }
     }
 
-    pub async fn update_voice_state(&self, state: VoiceState) {
+    pub async fn update_voice_state(&self, mut state: VoiceState) {
         let mut lock = self.voice_states.write().await;
+        if state.guild_id.is_none() {
+            if let Some(ref cid) = state.channel_id {
+                let channels_lock = self.guild_channels.read().await;
+                for (gid, chans) in channels_lock.iter() {
+                    if chans.iter().any(|c| &c.id == cid) {
+                        state.guild_id = Some(gid.clone());
+                        break;
+                    }
+                }
+            }
+        }
         if let Some(ref gid) = state.guild_id {
             let map = lock.entry(gid.clone()).or_insert_with(HashMap::new);
             if state.channel_id.is_none() {

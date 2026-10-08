@@ -326,16 +326,66 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
     match event_name {
         "READY" => {
             info!("Received READY from Discord Gateway!");
-            if let Some(private_channels) = data.get("private_channels") {
-                if let Ok(dms) = serde_json::from_value::<Vec<Channel>>(private_channels.clone()) {
-                    let app_clone = app.clone();
-                    tokio::spawn(async move {
-                        let state = app_clone.state::<AppState>();
+            let app_clone = app.clone();
+            let data_clone = data.clone();
+            tokio::spawn(async move {
+                let state = app_clone.state::<AppState>();
+                if let Some(private_channels) = data_clone.get("private_channels") {
+                    if let Ok(dms) = serde_json::from_value::<Vec<Channel>>(private_channels.clone()) {
                         state.store_dm_channels(dms).await;
-                    });
+                    }
                 }
-            }
+                if let Some(guilds) = data_clone.get("guilds").and_then(|v| v.as_array()) {
+                    for g in guilds {
+                        if let Some(gid) = g.get("id").and_then(|v| v.as_str()) {
+                            let gid_str = gid.to_string();
+                            if let Some(channels_json) = g.get("channels") {
+                                if let Ok(channels) = serde_json::from_value::<Vec<Channel>>(channels_json.clone()) {
+                                    state.store_guild_channels(gid_str.clone(), channels).await;
+                                }
+                            }
+                            if let Some(vstates_json) = g.get("voice_states") {
+                                if let Ok(mut vstates) = serde_json::from_value::<Vec<VoiceState>>(vstates_json.clone()) {
+                                    for s in &mut vstates {
+                                        if s.guild_id.is_none() {
+                                            s.guild_id = Some(gid_str.clone());
+                                        }
+                                    }
+                                    state.store_guild_voice_states(gid_str.clone(), vstates).await;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
             let _ = app.emit("discord-ready", data);
+        }
+        "READY_SUPPLEMENTAL" => {
+            info!("Received READY_SUPPLEMENTAL from Discord Gateway!");
+            let app_clone = app.clone();
+            let data_clone = data.clone();
+            tokio::spawn(async move {
+                let state = app_clone.state::<AppState>();
+                if let Some(guilds) = data_clone.get("guilds").and_then(|v| v.as_array()) {
+                    for g in guilds {
+                        if let Some(gid) = g.get("id").and_then(|v| v.as_str()) {
+                            let gid_str = gid.to_string();
+                            if let Some(vstates_json) = g.get("voice_states") {
+                                if let Ok(mut vstates) = serde_json::from_value::<Vec<VoiceState>>(vstates_json.clone()) {
+                                    for s in &mut vstates {
+                                        if s.guild_id.is_none() {
+                                            s.guild_id = Some(gid_str.clone());
+                                        }
+                                    }
+                                    info!("READY_SUPPLEMENTAL: loaded {} voice states for guild {}", vstates.len(), gid_str);
+                                    state.store_guild_voice_states(gid_str.clone(), vstates).await;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            let _ = app.emit("discord-ready-supplemental", data);
         }
         "MESSAGE_CREATE" => {
             let _ = app.emit("discord-message-create", data);
@@ -355,6 +405,27 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
         "CHANNEL_DELETE" => {
             let _ = app.emit("discord-channel-delete", data);
         }
+        "CALL_CREATE" => {
+            if let Some(cid) = data.get("channel_id").and_then(|v| v.as_str()) {
+                let cid_str = cid.to_string();
+                let app_clone = app.clone();
+                let data_clone = data.clone();
+                tokio::spawn(async move {
+                    let state = app_clone.state::<AppState>();
+                    if let Some(vstates_json) = data_clone.get("voice_states") {
+                        if let Ok(mut vstates) = serde_json::from_value::<Vec<VoiceState>>(vstates_json.clone()) {
+                            for s in &mut vstates {
+                                if s.guild_id.is_none() {
+                                    s.guild_id = Some(cid_str.clone());
+                                }
+                            }
+                            state.store_guild_voice_states(cid_str.clone(), vstates).await;
+                        }
+                    }
+                });
+            }
+            let _ = app.emit("discord-call-create", data);
+        }
         "GUILD_CREATE" => {
             if let Some(guild_id) = data.get("id").and_then(|v| v.as_str()) {
                 let gid = guild_id.to_string();
@@ -368,7 +439,12 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
                         }
                     }
                     if let Some(vstates_json) = data_clone.get("voice_states") {
-                        if let Ok(vstates) = serde_json::from_value::<Vec<VoiceState>>(vstates_json.clone()) {
+                        if let Ok(mut vstates) = serde_json::from_value::<Vec<VoiceState>>(vstates_json.clone()) {
+                            for s in &mut vstates {
+                                if s.guild_id.is_none() {
+                                    s.guild_id = Some(gid.clone());
+                                }
+                            }
                             state.store_guild_voice_states(gid.clone(), vstates).await;
                         }
                     }

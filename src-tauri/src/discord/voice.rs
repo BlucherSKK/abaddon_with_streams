@@ -157,7 +157,7 @@ async fn run_voice_loop(
                                         });
                                     }
 
-                                    // Send IDENTIFY (Op 0)
+                                    // Send IDENTIFY (Op 0) with DAVE protocol support
                                     let identify = json!({
                                         "op": 0,
                                         "d": {
@@ -166,7 +166,14 @@ async fn run_voice_loop(
                                             "session_id": session_id,
                                             "token": token,
                                             "video": true,
-                                            "streams": []
+                                            "streams": [
+                                                {
+                                                    "type": "video",
+                                                    "rid": "100",
+                                                    "quality": 100
+                                                }
+                                            ],
+                                            "max_dave_protocol_version": 1
                                         }
                                     });
                                     let _ = send_tx.send(WsMessage::Text(identify.to_string())).await;
@@ -301,9 +308,35 @@ async fn run_voice_loop(
                                     // CLIENT_DISCONNECT
                                     let _ = app_handle.emit("discord-voice-client-disconnect", &payload.d);
                                 }
+                                21 => {
+                                    // DAVE Prepare Transition
+                                    let transition_id = payload.d.get("transition_id").and_then(|v| v.as_i64()).unwrap_or(0);
+                                    let proto_ver = payload.d.get("protocol_version").and_then(|v| v.as_i64()).unwrap_or(1);
+                                    info!("Voice Gateway DAVE Prepare Transition: proto_ver={}, transition_id={}", proto_ver, transition_id);
+                                    // Acknowledge transition readiness via Op 23
+                                    let ready_transition = json!({
+                                        "op": 23,
+                                        "d": {
+                                            "transition_id": transition_id
+                                        }
+                                    });
+                                    let _ = send_tx.send(WsMessage::Text(ready_transition.to_string())).await;
+                                }
+                                22 => {
+                                    // DAVE Execute Transition
+                                    let transition_id = payload.d.get("transition_id").and_then(|v| v.as_i64()).unwrap_or(0);
+                                    info!("Voice Gateway DAVE Execute Transition: transition_id={}", transition_id);
+                                }
+                                24 => {
+                                    // DAVE Prepare Epoch
+                                    info!("Voice Gateway DAVE Prepare Epoch: {:?}", payload.d);
+                                }
                                 _ => {}
                             }
                         }
+                    }
+                    Some(Ok(WsMessage::Binary(bin))) => {
+                        log::trace!("Voice gateway received binary message: {} bytes", bin.len());
                     }
                     Some(Ok(WsMessage::Close(reason))) => {
                         info!("Voice gateway closed connection: {:?}", reason);

@@ -186,6 +186,22 @@ async function setupGatewayListeners() {
     }
   });
 
+  await listen("discord-ready-supplemental", async (event) => {
+    console.log("Gateway READY_SUPPLEMENTAL:", event.payload);
+    if (currentGuildId) {
+      try {
+        const vstates = await invoke("get_guild_voice_states", { guildId: currentGuildId });
+        if (vstates && Array.isArray(vstates)) {
+          currentGuildVoiceStates.clear();
+          for (const st of vstates) {
+            currentGuildVoiceStates.set(st.user_id, st);
+          }
+          updateVoiceSidebarUsers();
+        }
+      } catch (e) {}
+    }
+  });
+
   await listen("discord-guild-create", async (event) => {
     const guild = event.payload;
     if (currentGuildId && guild.id === currentGuildId) {
@@ -193,6 +209,16 @@ async function setupGatewayListeners() {
         currentChannels = guild.channels;
         renderChannels(guild.channels);
       }
+      try {
+        const vstates = await invoke("get_guild_voice_states", { guildId: currentGuildId });
+        if (vstates && Array.isArray(vstates)) {
+          currentGuildVoiceStates.clear();
+          for (const st of vstates) {
+            currentGuildVoiceStates.set(st.user_id, st);
+          }
+          updateVoiceSidebarUsers();
+        }
+      } catch (e) {}
     }
   });
 
