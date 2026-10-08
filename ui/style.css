@@ -156,6 +156,21 @@ body, html {
   color: var(--text-muted);
   padding: 12px 8px 4px 8px;
   letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.channel-category:hover {
+  color: var(--text-normal);
+}
+
+.category-channels-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .channel-item {

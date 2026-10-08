@@ -394,6 +394,12 @@ async function selectGuild(guild) {
   }
 }
 
+function getChannelType(c) {
+  if (c.type !== undefined && c.type !== null) return Number(c.type);
+  if (c.channel_type !== undefined && c.channel_type !== null) return Number(c.channel_type);
+  return 0;
+}
+
 function renderChannels(channels) {
   channelsList.innerHTML = "";
   if (!channels || channels.length === 0) {
@@ -404,14 +410,15 @@ function renderChannels(channels) {
   // Sort channels by position
   channels.sort((a, b) => (a.position || 0) - (b.position || 0));
 
-  const categories = channels.filter((c) => c.channel_type === 4);
-  const uncategorized = channels.filter((c) => !c.parent_id && c.channel_type !== 4);
+  const categories = channels.filter((c) => getChannelType(c) === 4);
+  const uncategorized = channels.filter((c) => !c.parent_id && getChannelType(c) !== 4);
 
   function createChannelElement(c) {
+    const type = getChannelType(c);
     const item = document.createElement("div");
     item.className = "channel-item" + (c.id === currentChannelId ? " active" : "");
-    const isVoice = c.channel_type === 2 || c.channel_type === 13;
-    const icon = c.channel_type === 13 ? "📡" : (isVoice ? "🔊" : (c.channel_type === 5 ? "📢" : "#"));
+    const isVoice = type === 2 || type === 13;
+    const icon = type === 13 ? "📡" : (isVoice ? "🔊" : (type === 5 ? "📢" : "#"));
     item.innerHTML = `<span class="channel-icon">${icon}</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${c.name}</span>`;
     item.addEventListener("click", () => {
       if (isVoice) {
@@ -423,30 +430,44 @@ function renderChannels(channels) {
     return item;
   }
 
-  // Uncategorized channels
+  // Uncategorized channels (top of server)
   if (uncategorized.length > 0) {
     uncategorized.forEach((c) => {
       channelsList.appendChild(createChannelElement(c));
     });
   }
 
-  // Categories
+  // Categories and their child channels
   categories.forEach((cat) => {
-    const catLabel = document.createElement("div");
-    catLabel.className = "channel-category";
-    catLabel.innerText = cat.name || "Category";
-    channelsList.appendChild(catLabel);
-
-    const childChannels = channels.filter((c) => c.parent_id === cat.id);
+    const catHeader = document.createElement("div");
+    catHeader.className = "channel-category";
+    catHeader.innerHTML = `<span>${(cat.name || "Category").toUpperCase()}</span><span class="category-arrow" style="font-size: 9px; transition: transform 0.2s;">▼</span>`;
+    
+    const catContainer = document.createElement("div");
+    catContainer.className = "category-channels-container";
+    
+    const childChannels = channels.filter((c) => c.parent_id === cat.id && getChannelType(c) !== 4);
     childChannels.forEach((c) => {
-      channelsList.appendChild(createChannelElement(c));
+      catContainer.appendChild(createChannelElement(c));
     });
+
+    catHeader.addEventListener("click", () => {
+      const isCollapsed = catContainer.style.display === "none";
+      catContainer.style.display = isCollapsed ? "block" : "none";
+      const arrow = catHeader.querySelector(".category-arrow");
+      if (arrow) {
+        arrow.style.transform = isCollapsed ? "rotate(0deg)" : "rotate(-90deg)";
+      }
+    });
+
+    channelsList.appendChild(catHeader);
+    channelsList.appendChild(catContainer);
   });
 
-  // Fallback if no categories matched
+  // Fallback if there were channels but no categories or uncategorized matched
   if (categories.length === 0 && uncategorized.length === 0) {
     channels.forEach((c) => {
-      if (c.channel_type !== 4) {
+      if (getChannelType(c) !== 4) {
         channelsList.appendChild(createChannelElement(c));
       }
     });
@@ -592,7 +613,7 @@ async function joinVoiceChannel(channel) {
 
     // Switch view to Stage / Voice
     toggleStageView(true);
-    chatHeaderIcon.innerText = channel.channel_type === 13 ? "📡" : "🔊";
+    chatHeaderIcon.innerText = getChannelType(channel) === 13 ? "📡" : "🔊";
     chatHeaderName.innerText = channel.name;
     chatHeaderTopic.innerText = channel.topic || "Voice Channel";
 

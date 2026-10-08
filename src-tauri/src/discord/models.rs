@@ -27,7 +27,7 @@ pub struct Guild {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Channel {
     pub id: String,
-    #[serde(rename = "type")]
+    #[serde(rename = "type", alias = "channel_type")]
     pub channel_type: u8,
     pub guild_id: Option<String>,
     pub name: Option<String>,
