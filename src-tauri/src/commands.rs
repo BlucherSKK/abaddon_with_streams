@@ -78,12 +78,37 @@ pub async fn get_guilds(state: State<'_, AppState>) -> Result<Vec<Guild>, String
 }
 
 #[tauri::command]
+pub async fn get_dms(state: State<'_, AppState>) -> Result<Vec<Channel>, String> {
+    match state.rest.get_dm_channels().await {
+        Ok(dms) => {
+            state.store_dm_channels(dms.clone()).await;
+            Ok(dms)
+        }
+        Err(_) => {
+            let cached = state.get_cached_dm_channels().await;
+            Ok(cached)
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn get_channels(guild_id: String, state: State<'_, AppState>) -> Result<Vec<Channel>, String> {
-    state
-        .rest
-        .get_guild_channels(&guild_id)
-        .await
-        .map_err(|e| format!("Failed to fetch channels: {}", e))
+    if let Some(cached) = state.get_cached_guild_channels(&guild_id).await {
+        if !cached.is_empty() {
+            return Ok(cached);
+        }
+    }
+
+    match state.rest.get_guild_channels(&guild_id).await {
+        Ok(channels) => {
+            state.store_guild_channels(guild_id, channels.clone()).await;
+            Ok(channels)
+        }
+        Err(_) => {
+            let cached = state.get_cached_guild_channels(&guild_id).await.unwrap_or_default();
+            Ok(cached)
+        }
+    }
 }
 
 #[tauri::command]

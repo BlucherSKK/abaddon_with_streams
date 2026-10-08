@@ -1,3 +1,5 @@
+use crate::discord::models::Channel;
+use crate::state::AppState;
 use anyhow::{anyhow, Result};
 use futures_util::{SinkExt, StreamExt};
 use log::{error, info, warn};
@@ -6,7 +8,7 @@ use serde_json::json;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::protocol::Message as WsMessage;
@@ -323,6 +325,15 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
     match event_name {
         "READY" => {
             info!("Received READY from Discord Gateway!");
+            if let Some(private_channels) = data.get("private_channels") {
+                if let Ok(dms) = serde_json::from_value::<Vec<Channel>>(private_channels.clone()) {
+                    let app_clone = app.clone();
+                    tokio::spawn(async move {
+                        let state = app_clone.state::<AppState>();
+                        state.store_dm_channels(dms).await;
+                    });
+                }
+            }
             let _ = app.emit("discord-ready", data);
         }
         "MESSAGE_CREATE" => {
@@ -344,6 +355,18 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
             let _ = app.emit("discord-channel-delete", data);
         }
         "GUILD_CREATE" => {
+            if let Some(guild_id) = data.get("id").and_then(|v| v.as_str()) {
+                let gid = guild_id.to_string();
+                if let Some(channels_json) = data.get("channels") {
+                    if let Ok(channels) = serde_json::from_value::<Vec<Channel>>(channels_json.clone()) {
+                        let app_clone = app.clone();
+                        tokio::spawn(async move {
+                            let state = app_clone.state::<AppState>();
+                            state.store_guild_channels(gid, channels).await;
+                        });
+                    }
+                }
+            }
             let _ = app.emit("discord-guild-create", data);
         }
         "GUILD_DELETE" => {

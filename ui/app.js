@@ -178,8 +178,21 @@ function setupEventListeners() {
 async function setupGatewayListeners() {
   if (!window.__TAURI__) return;
 
-  await listen("discord-ready", (event) => {
+  await listen("discord-ready", async (event) => {
     console.log("Gateway READY:", event.payload);
+    if (!currentGuildId) {
+      await loadDms();
+    }
+  });
+
+  await listen("discord-guild-create", async (event) => {
+    const guild = event.payload;
+    if (currentGuildId && guild.id === currentGuildId) {
+      if (guild.channels && guild.channels.length > 0) {
+        currentChannels = guild.channels;
+        renderChannels(guild.channels);
+      }
+    }
   });
 
   await listen("discord-message-create", (event) => {
@@ -224,6 +237,7 @@ async function performLogin(token) {
     loginModal.style.display = "none";
     renderCurrentUser(user);
     await loadGuilds();
+    await selectDmHome();
   } catch (err) {
     loginErrorMsg.innerText = String(err);
   }
@@ -278,12 +292,82 @@ async function loadGuilds() {
   }
 }
 
-function selectDmHome() {
+async function selectDmHome() {
   currentGuildId = null;
   serverNameLabel.innerText = "Direct Messages";
   document.querySelectorAll(".server-icon").forEach((el) => el.classList.remove("active"));
   btnDm.classList.add("active");
-  channelsList.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 13px;">Direct Messages</div>`;
+  await loadDms();
+}
+
+async function loadDms() {
+  channelsList.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 13px;">Loading direct messages...</div>`;
+  try {
+    const dms = await invoke("get_dms");
+    renderDms(dms);
+  } catch (err) {
+    console.error("Failed to load DMs:", err);
+    channelsList.innerHTML = `<div style="padding: 12px; color: var(--red); font-size: 13px;">Failed to load direct messages</div>`;
+  }
+}
+
+function renderDms(dms) {
+  channelsList.innerHTML = "";
+  if (!dms || dms.length === 0) {
+    channelsList.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 13px;">No direct messages</div>`;
+    return;
+  }
+
+  const catLabel = document.createElement("div");
+  catLabel.className = "channel-category";
+  catLabel.innerText = "Direct Messages";
+  channelsList.appendChild(catLabel);
+
+  dms.forEach((dm) => {
+    const item = document.createElement("div");
+    item.className = "channel-item" + (dm.id === currentChannelId ? " active" : "");
+
+    const recipient = dm.recipients && dm.recipients[0];
+    const name = dm.name || (recipient ? (recipient.global_name || recipient.username) : "Direct Message");
+    const avatarUrl = recipient && recipient.avatar 
+      ? `https://cdn.discordapp.com/avatars/${recipient.id}/${recipient.avatar}.png?size=32`
+      : null;
+
+    const avatarHtml = avatarUrl
+      ? `<img src="${avatarUrl}" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover;">`
+      : `<span class="channel-icon">@</span>`;
+
+    item.innerHTML = `${avatarHtml}<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</span>`;
+    item.addEventListener("click", () => {
+      selectDmChannel(dm, name);
+    });
+    channelsList.appendChild(item);
+  });
+}
+
+async function selectDmChannel(dm, name) {
+  currentChannelId = dm.id;
+  chatHeaderIcon.innerText = "@";
+  chatHeaderName.innerText = name;
+  chatHeaderTopic.innerText = "Direct Message";
+  messageTextarea.placeholder = `Message @${name}`;
+
+  document.querySelectorAll(".channel-item").forEach((el) => {
+    el.classList.toggle("active", el.innerText.includes(name));
+  });
+
+  toggleStageView(false);
+
+  messagesList.innerHTML = `<div style="color: var(--text-muted); text-align: center; margin-top: 40px;">Loading messages...</div>`;
+
+  try {
+    const messages = await invoke("get_messages", { channelId: dm.id, limit: 50 });
+    currentMessages = messages.reverse();
+    renderMessages(currentMessages);
+  } catch (err) {
+    console.error("Failed to load DM messages:", err);
+    messagesList.innerHTML = `<div style="color: var(--red); text-align: center; margin-top: 40px;">Failed to load messages</div>`;
+  }
 }
 
 async function selectGuild(guild) {
@@ -294,53 +378,77 @@ async function selectGuild(guild) {
   const clickedIcon = Array.from(guildsContainer.children).find((c) => c.title === guild.name);
   if (clickedIcon) clickedIcon.classList.add("active");
 
+  channelsList.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 13px;">Loading channels...</div>`;
+
   try {
-    const channels = await invoke("get_channels", { guildId: guild.id });
-    currentChannels = channels;
-    renderChannels(channels);
+    let channels = await invoke("get_channels", { guildId: guild.id });
+    if (!channels || channels.length === 0) {
+      await new Promise(r => setTimeout(r, 600));
+      channels = await invoke("get_channels", { guildId: guild.id });
+    }
+    currentChannels = channels || [];
+    renderChannels(currentChannels);
   } catch (err) {
     console.error("Failed to fetch channels:", err);
+    channelsList.innerHTML = `<div style="padding: 12px; color: var(--red); font-size: 13px;">Failed to load channels</div>`;
   }
 }
 
 function renderChannels(channels) {
   channelsList.innerHTML = "";
+  if (!channels || channels.length === 0) {
+    channelsList.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 13px;">No channels found</div>`;
+    return;
+  }
 
   // Sort channels by position
   channels.sort((a, b) => (a.position || 0) - (b.position || 0));
 
   const categories = channels.filter((c) => c.channel_type === 4);
-  const textChannels = channels.filter((c) => c.channel_type === 0);
-  const voiceChannels = channels.filter((c) => c.channel_type === 2 || c.channel_type === 13);
+  const uncategorized = channels.filter((c) => !c.parent_id && c.channel_type !== 4);
 
-  if (textChannels.length > 0) {
-    const catLabel = document.createElement("div");
-    catLabel.className = "channel-category";
-    catLabel.innerText = "Text Channels";
-    channelsList.appendChild(catLabel);
+  function createChannelElement(c) {
+    const item = document.createElement("div");
+    item.className = "channel-item" + (c.id === currentChannelId ? " active" : "");
+    const isVoice = c.channel_type === 2 || c.channel_type === 13;
+    const icon = c.channel_type === 13 ? "📡" : (isVoice ? "🔊" : (c.channel_type === 5 ? "📢" : "#"));
+    item.innerHTML = `<span class="channel-icon">${icon}</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${c.name}</span>`;
+    item.addEventListener("click", () => {
+      if (isVoice) {
+        joinVoiceChannel(c);
+      } else {
+        selectTextChannel(c);
+      }
+    });
+    return item;
+  }
 
-    textChannels.forEach((c) => {
-      const item = document.createElement("div");
-      item.className = "channel-item" + (c.id === currentChannelId ? " active" : "");
-      item.innerHTML = `<span class="channel-icon">#</span><span>${c.name}</span>`;
-      item.addEventListener("click", () => selectTextChannel(c));
-      channelsList.appendChild(item);
+  // Uncategorized channels
+  if (uncategorized.length > 0) {
+    uncategorized.forEach((c) => {
+      channelsList.appendChild(createChannelElement(c));
     });
   }
 
-  if (voiceChannels.length > 0) {
+  // Categories
+  categories.forEach((cat) => {
     const catLabel = document.createElement("div");
     catLabel.className = "channel-category";
-    catLabel.innerText = "Voice & Stage Channels";
+    catLabel.innerText = cat.name || "Category";
     channelsList.appendChild(catLabel);
 
-    voiceChannels.forEach((c) => {
-      const item = document.createElement("div");
-      item.className = "channel-item";
-      const icon = c.channel_type === 13 ? "📡" : "🔊";
-      item.innerHTML = `<span class="channel-icon">${icon}</span><span>${c.name}</span>`;
-      item.addEventListener("click", () => joinVoiceChannel(c));
-      channelsList.appendChild(item);
+    const childChannels = channels.filter((c) => c.parent_id === cat.id);
+    childChannels.forEach((c) => {
+      channelsList.appendChild(createChannelElement(c));
+    });
+  });
+
+  // Fallback if no categories matched
+  if (categories.length === 0 && uncategorized.length === 0) {
+    channels.forEach((c) => {
+      if (c.channel_type !== 4) {
+        channelsList.appendChild(createChannelElement(c));
+      }
     });
   }
 }

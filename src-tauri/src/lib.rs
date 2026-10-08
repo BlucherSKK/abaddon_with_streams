@@ -19,6 +19,7 @@ pub fn run() {
             logout,
             get_me,
             get_guilds,
+            get_dms,
             get_channels,
             get_messages,
             send_message,

@@ -89,6 +89,25 @@ impl DiscordRestClient {
         Ok(guilds)
     }
 
+    pub async fn get_dm_channels(&self) -> Result<Vec<Channel>> {
+        let token = self.auth_header().await?;
+        let res = self
+            .client
+            .get(format!("{}/users/@me/channels", BASE_URL))
+            .header(AUTHORIZATION, &token)
+            .send()
+            .await?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let text = res.text().await.unwrap_or_default();
+            return Err(anyhow!("Failed to fetch DM channels (status {}): {}", status, text));
+        }
+
+        let dms: Vec<Channel> = res.json().await?;
+        Ok(dms)
+    }
+
     pub async fn get_guild_channels(&self, guild_id: &str) -> Result<Vec<Channel>> {
         let token = self.auth_header().await?;
         let res = self

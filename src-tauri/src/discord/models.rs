@@ -36,6 +36,10 @@ pub struct Channel {
     pub parent_id: Option<String>,
     pub bitrate: Option<u32>,
     pub user_limit: Option<u32>,
+    #[serde(default)]
+    pub recipients: Vec<User>,
+    pub icon: Option<String>,
+    pub last_message_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
