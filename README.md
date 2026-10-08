@@ -1,6 +1,6 @@
 ### Abaddon
 ---
-Alternative Discord client made in C++ with GTK
+Alternative Discord client made in Rust with Tauri (supporting Linux & macOS x86_64)
 
 <table>
   <tr>
@@ -13,79 +13,39 @@ Alternative Discord client made in C++ with GTK
   </tr>
 </table>
 
-<a href="https://discord.gg/wkCU3vuzG5"><img src="https://discord.com/api/guilds/858156817711890443/widget.png?style=shield"></a>
-
 Current features:
 
-* Not Electron
-* Voice support
-* Handles most types of chat messages including embeds, images, and replies
-* Completely styleable/customizable
-* Identifies to Discord as the web client unlike other clients so less likely to be falsely flagged as spam<sup>1</sup>
-* Set status
-* Unread and mention indicators
-* Notifications (non-Windows)
-* Start new DMs and group DMs
-* View user profiles (notes, mutual servers, mutual friends)
-* Kick, ban, and unban members
-* Modify roles and modify members' roles
-* Manage invites
-* Manage emojis
-* View audit log
-* Emojis<sup>2</sup>
-* Thread support<sup>3</sup>
-* Animated avatars, server icons, emojis (can be turned off)
+* Built in **Rust** with **Tauri** (lightweight, memory-safe, fast)
+* Supported platforms: **Linux** and **macOS x86_64**
+* Voice & Stream Stage Window with stream switching and participant stage
+* Discord Gateway v9 real-time WebSocket connection
+* Handles chat messages, attachments, embeds, and avatars
+* Safe browser identification to Discord web client endpoints
 
-1 - Abaddon tries its best (though is not perfect) to make Discord think it's a legitimate web client. Some of the
-things done to do this
-include: using a browser user agent, sending the same IDENTIFY message that the official web client does, using API v9
-endpoints in all cases, and not using endpoints the web client does not normally use. There are still a few smaller
-inconsistencies, however. For example the web client sends lots of telemetry via the `/science` endpoint (uBlock origin
-stops this) as well as in the headers of all requests.<br>
+### Building
 
-**See [here](#the-spam-filter)** for things you might want to avoid if you are worried about being caught in the spam
-filter.
-
-2 - Unicode emojis are substituted manually as opposed to rendered by GTK on non-Windows platforms. This can be changed
-with the `stock_emojis` setting as shown at the bottom of this README. A CBDT-based font using Twemoji is provided to
-allow GTK to render emojis natively on Windows.
-
-3 - There are some inconsistencies with thread state that might be encountered in some more uncommon cases, but they are
-the result of fundamental issues with Discord's thread implementation.
-
-### Building manually (recommended if not on Windows):
-
-#### Windows (with MSYS2):
-
-1. Install following packages:
-    * mingw-w64-x86_64-cmake
-    * mingw-w64-x86_64-ninja
-    * mingw-w64-x86_64-sqlite3
-    * mingw-w64-x86_64-nlohmann-json
-    * mingw-w64-x86_64-curl
-    * mingw-w64-x86_64-zlib
-    * mingw-w64-x86_64-gtkmm3
-    * mingw-w64-x86_64-libhandy
-    * mingw-w64-x86_64-opus
-    * mingw-w64-x86_64-libsodium
-    * mingw-w64-x86_64-openssl
-    * mingw-w64-x86_64-spdlog
-2. `git clone --recurse-submodules="subprojects" https://github.com/uowuo/abaddon && cd abaddon`
-4. `mkdir build && cd build`
-5. `cmake -GNinja -DCMAKE_BUILD_TYPE=RelWithDebInfo ..`
-6. `ninja`
-7. [Copy resources](#resources)
-
-#### Mac:
-
-1. `git clone https://github.com/uowuo/abaddon --recurse-submodules="subprojects" && cd abaddon`
-2. `brew install gtkmm3 nlohmann-json libhandy opus libsodium spdlog adwaita-icon-theme`
-3. `mkdir build && cd build`
-4. `cmake ..`
-5. `make`
-6. [Copy resources](#resources)
+Ensure you have Rust and Cargo installed:
 
 #### Linux:
+```bash
+# Ubuntu / Debian
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+# Arch Linux
+sudo pacman -S webkit2gtk-4.1 base-devel openssl
+
+# Build
+cargo build --release
+```
+
+#### macOS (x86_64 / Intel):
+```bash
+# Install target if needed
+rustup target add x86_64-apple-darwin
+
+# Build
+cargo build --release --target x86_64-apple-darwin
+```
 
 1. Install dependencies
     * On Ubuntu 22.04 (Jammy)/Debian 12 (bookworm) and newer:

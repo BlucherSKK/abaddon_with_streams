@@ -17,7 +17,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
 
       - name: Determine next release tag
@@ -52,28 +51,29 @@ jobs:
           echo "Computed tag: $TAG"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Install dependencies
-        run: |
-          brew install pkg-config gtkmm3 nlohmann-json jpeg opus libsodium spdlog libhandy openssl@3
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Build Abaddon (macosx64)
         run: |
-          cmake -Bbuild \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
-            -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
-          cmake --build build -j$(sysctl -n hw.ncpu)
+          cargo build --release --target x86_64-apple-darwin --verbose
 
       - name: Prepare release packages
         run: |
           TAG="${{ steps.next_tag.outputs.tag }}"
           PACKAGE_DIR="abaddon-macosx64-${TAG}"
           mkdir -p "$PACKAGE_DIR"
-          cp build/abaddon "$PACKAGE_DIR/abaddon"
-          cp -r res/css "$PACKAGE_DIR/css"
-          cp -r res/res "$PACKAGE_DIR/res"
-          if [ -d res/fonts ]; then
-            cp -r res/fonts "$PACKAGE_DIR/fonts"
+          cp target/x86_64-apple-darwin/release/abaddon "$PACKAGE_DIR/abaddon"
+          if [ -d ui ]; then
+            cp -r ui "$PACKAGE_DIR/ui"
+          fi
+          if [ -d res ]; then
+            cp -r res "$PACKAGE_DIR/res"
           fi
           tar -czvf "abaddon-macosx64-${TAG}.tar.gz" "$PACKAGE_DIR"
           zip -r "abaddon-macosx64-${TAG}.zip" "$PACKAGE_DIR"

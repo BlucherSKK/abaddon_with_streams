@@ -5,6 +5,8 @@
 
 # Build directory contents
 build/*
+target/
+src-tauri/target/
 
 # User-specific files
 *.rsuser

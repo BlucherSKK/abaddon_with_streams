@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abaddon</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- SERVERS SIDEBAR -->
+    <div id="servers-bar">
+      <div class="server-icon active" id="btn-dm" title="Direct Messages">
+        <div class="server-pill"></div>
+        <span>@</span>
+      </div>
+      <div class="server-separator"></div>
+      <div id="guilds-container" style="display: flex; flex-direction: column; gap: 8px; align-items: center; width: 100%;">
+        <!-- Guild icons populated dynamically -->
+      </div>
+    </div>
+
+    <!-- CHANNELS SIDEBAR -->
+    <div id="channels-bar">
+      <div id="server-header">
+        <span id="server-name-label">Direct Messages</span>
+        <span style="opacity: 0.6; font-size: 12px;">▼</span>
+      </div>
+
+      <div id="channels-list">
+        <!-- Channels list populated dynamically -->
+      </div>
+
+      <!-- VOICE CONNECTED BAR -->
+      <div id="voice-connected-bar">
+        <div class="voice-status-header">
+          <div class="voice-status-title">
+            <span>●</span>
+            <span>Voice Connected</span>
+          </div>
+          <div class="voice-quick-actions">
+            <button class="btn-icon" id="btn-toggle-mic" title="Mute/Unmute">🎙️</button>
+            <button class="btn-icon" id="btn-toggle-deaf" title="Deafen/Undeafen">🎧</button>
+            <button class="btn-icon" id="btn-stream-toggle" title="Go Live / Stream">📺</button>
+            <button class="btn-icon disconnect" id="btn-voice-disconnect" title="Disconnect">📞</button>
+          </div>
+        </div>
+        <div class="voice-status-channel" id="voice-channel-name">Voice Channel</div>
+      </div>
+
+      <!-- USER FOOTER -->
+      <div id="user-footer">
+        <div class="user-avatar" id="current-user-avatar">
+          <span id="current-user-initial">?</span>
+          <div class="user-status-dot"></div>
+        </div>
+        <div class="user-details">
+          <div class="username" id="current-username">Loading...</div>
+          <div class="user-tag" id="current-usertag">#0000</div>
+        </div>
+        <button class="btn-icon" id="btn-logout" title="Settings / Logout">⚙️</button>
+      </div>
+    </div>
+
+    <!-- MAIN CHAT & STAGE AREA -->
+    <div id="main-area">
+      <!-- HEADER -->
+      <div id="chat-header">
+        <div class="channel-title">
+          <span id="chat-header-icon">#</span>
+          <span id="chat-header-name">select-a-channel</span>
+          <span class="channel-topic" id="chat-header-topic"></span>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button class="btn-icon" id="btn-toggle-stage-view" style="display: none;" title="Toggle Stage / Chat">🎙️ Stage</button>
+        </div>
+      </div>
+
+      <!-- STAGE / VOICE VIEW -->
+      <div id="stage-container">
+        <!-- Stream Switcher Bar -->
+        <div id="stream-switcher-bar">
+          <!-- Active stream chips -->
+        </div>
+
+        <!-- Stream Player Box -->
+        <div id="stream-player-box" style="display: none;">
+          <canvas id="stream-canvas"></canvas>
+          <div class="stream-overlay">
+            <div class="stream-info">
+              <span class="stream-title" id="stream-title-text">Watching Stream</span>
+              <span class="stream-subtitle" id="stream-user-text">Streamer</span>
+            </div>
+            <div class="stream-actions">
+              <button class="btn-send" id="btn-stream-exit" style="background: var(--red);">Exit Stream</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Participant Grid -->
+        <div style="font-weight: bold; color: var(--text-muted); font-size: 12px; text-transform: uppercase;">Participants</div>
+        <div id="participant-grid">
+          <!-- Participant Cards -->
+        </div>
+      </div>
+
+      <!-- MESSAGES LIST -->
+      <div id="messages-list">
+        <div style="color: var(--text-muted); text-align: center; margin-top: 40px;">Select a channel to begin messaging.</div>
+      </div>
+
+      <!-- CHAT INPUT -->
+      <div id="chat-input-bar">
+        <div class="input-container">
+          <textarea id="message-textarea" placeholder="Message #general" rows="1"></textarea>
+          <button class="btn-send" id="btn-send-message">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGIN MODAL -->
+  <div id="login-modal">
+    <div class="login-box">
+      <div class="login-title">Abaddon</div>
+      <div class="login-subtitle">Discord client in Rust with Tauri</div>
+      <div class="form-group">
+        <label class="form-label">Discord Token</label>
+        <input type="password" id="token-input" class="form-input" placeholder="Paste your Discord User Token here">
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted);">
+        <input type="checkbox" id="remember-token-check" checked>
+        <label for="remember-token-check">Remember token locally</label>
+      </div>
+      <div class="login-error" id="login-error-msg"></div>
+      <button class="btn-login" id="btn-login-submit">Login</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
