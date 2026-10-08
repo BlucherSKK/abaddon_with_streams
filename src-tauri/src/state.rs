@@ -1,4 +1,7 @@
-use crate::discord::{Channel, DiscordRestClient, GatewayClient, GatewayCommand, Guild, User};
+use crate::discord::{
+    Channel, DiscordRestClient, GatewayClient, GatewayCommand, Guild, User, VoiceGatewayClient,
+    VoiceState,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, RwLock};
@@ -9,9 +12,16 @@ pub struct AppState {
     pub current_user: Arc<RwLock<Option<User>>>,
     pub active_stream_key: Arc<RwLock<Option<String>>>,
     pub active_voice_channel: Arc<RwLock<Option<String>>>,
+    pub active_voice_guild: Arc<RwLock<Option<String>>>,
     pub guild_channels: Arc<RwLock<HashMap<String, Vec<Channel>>>>,
     pub dm_channels: Arc<RwLock<Vec<Channel>>>,
     pub guilds: Arc<RwLock<HashMap<String, Guild>>>,
+    pub voice_states: Arc<RwLock<HashMap<String, HashMap<String, VoiceState>>>>,
+    pub cached_users: Arc<RwLock<HashMap<String, User>>>,
+    pub voice_gateway: Arc<Mutex<Option<VoiceGatewayClient>>>,
+    pub voice_session_id: Arc<RwLock<Option<String>>>,
+    pub voice_server_endpoint: Arc<RwLock<Option<String>>>,
+    pub voice_server_token: Arc<RwLock<Option<String>>>,
 }
 
 impl AppState {
@@ -22,9 +32,16 @@ impl AppState {
             current_user: Arc::new(RwLock::new(None)),
             active_stream_key: Arc::new(RwLock::new(None)),
             active_voice_channel: Arc::new(RwLock::new(None)),
+            active_voice_guild: Arc::new(RwLock::new(None)),
             guild_channels: Arc::new(RwLock::new(HashMap::new())),
             dm_channels: Arc::new(RwLock::new(Vec::new())),
             guilds: Arc::new(RwLock::new(HashMap::new())),
+            voice_states: Arc::new(RwLock::new(HashMap::new())),
+            cached_users: Arc::new(RwLock::new(HashMap::new())),
+            voice_gateway: Arc::new(Mutex::new(None)),
+            voice_session_id: Arc::new(RwLock::new(None)),
+            voice_server_endpoint: Arc::new(RwLock::new(None)),
+            voice_server_token: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -46,5 +63,56 @@ impl AppState {
     pub async fn get_cached_dm_channels(&self) -> Vec<Channel> {
         let lock = self.dm_channels.read().await;
         lock.clone()
+    }
+
+    pub async fn store_guild_voice_states(&self, guild_id: String, states: Vec<VoiceState>) {
+        let mut lock = self.voice_states.write().await;
+        let map = lock.entry(guild_id).or_insert_with(HashMap::new);
+        for s in states {
+            map.insert(s.user_id.clone(), s);
+        }
+    }
+
+    pub async fn update_voice_state(&self, state: VoiceState) {
+        let mut lock = self.voice_states.write().await;
+        if let Some(ref gid) = state.guild_id {
+            let map = lock.entry(gid.clone()).or_insert_with(HashMap::new);
+            if state.channel_id.is_none() {
+                map.remove(&state.user_id);
+            } else {
+                map.insert(state.user_id.clone(), state);
+            }
+        } else if state.channel_id.is_none() {
+            for map in lock.values_mut() {
+                map.remove(&state.user_id);
+            }
+        }
+    }
+
+    pub async fn get_guild_voice_states(&self, guild_id: &str) -> Vec<VoiceState> {
+        let lock = self.voice_states.read().await;
+        if let Some(map) = lock.get(guild_id) {
+            map.values().cloned().collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    pub async fn get_channel_voice_states(&self, channel_id: &str) -> Vec<VoiceState> {
+        let lock = self.voice_states.read().await;
+        let mut res = Vec::new();
+        for map in lock.values() {
+            for s in map.values() {
+                if s.channel_id.as_deref() == Some(channel_id) {
+                    res.push(s.clone());
+                }
+            }
+        }
+        res
+    }
+
+    pub async fn store_user(&self, user: User) {
+        let mut lock = self.cached_users.write().await;
+        lock.insert(user.id.clone(), user);
     }
 }

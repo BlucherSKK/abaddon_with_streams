@@ -1,4 +1,5 @@
-use crate::discord::models::Channel;
+use crate::discord::models::{Channel, VoiceState};
+use crate::discord::voice::VoiceGatewayClient;
 use crate::state::AppState;
 use anyhow::{anyhow, Result};
 use futures_util::{SinkExt, StreamExt};
@@ -357,15 +358,21 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
         "GUILD_CREATE" => {
             if let Some(guild_id) = data.get("id").and_then(|v| v.as_str()) {
                 let gid = guild_id.to_string();
-                if let Some(channels_json) = data.get("channels") {
-                    if let Ok(channels) = serde_json::from_value::<Vec<Channel>>(channels_json.clone()) {
-                        let app_clone = app.clone();
-                        tokio::spawn(async move {
-                            let state = app_clone.state::<AppState>();
-                            state.store_guild_channels(gid, channels).await;
-                        });
+                let app_clone = app.clone();
+                let data_clone = data.clone();
+                tokio::spawn(async move {
+                    let state = app_clone.state::<AppState>();
+                    if let Some(channels_json) = data_clone.get("channels") {
+                        if let Ok(channels) = serde_json::from_value::<Vec<Channel>>(channels_json.clone()) {
+                            state.store_guild_channels(gid.clone(), channels).await;
+                        }
                     }
-                }
+                    if let Some(vstates_json) = data_clone.get("voice_states") {
+                        if let Ok(vstates) = serde_json::from_value::<Vec<VoiceState>>(vstates_json.clone()) {
+                            state.store_guild_voice_states(gid.clone(), vstates).await;
+                        }
+                    }
+                });
             }
             let _ = app.emit("discord-guild-create", data);
         }
@@ -373,9 +380,56 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
             let _ = app.emit("discord-guild-delete", data);
         }
         "VOICE_STATE_UPDATE" => {
+            if let Ok(vstate) = serde_json::from_value::<VoiceState>(data.clone()) {
+                let app_clone = app.clone();
+                let state_clone = vstate.clone();
+                tokio::spawn(async move {
+                    let state = app_clone.state::<AppState>();
+                    let my_id = {
+                        let user_lock = state.current_user.read().await;
+                        user_lock.as_ref().map(|u| u.id.clone())
+                    };
+
+                    if let Some(ref uid) = my_id {
+                        if state_clone.user_id == *uid {
+                            if state_clone.channel_id.is_none() {
+                                // Left voice channel
+                                let mut vg_lock = state.voice_gateway.lock().await;
+                                if let Some(vg) = vg_lock.take() {
+                                    vg.stop().await;
+                                }
+                                *state.voice_session_id.write().await = None;
+                                *state.voice_server_endpoint.write().await = None;
+                                *state.voice_server_token.write().await = None;
+                            } else if let Some(ref sess_id) = state_clone.session_id {
+                                *state.voice_session_id.write().await = Some(sess_id.clone());
+                                if let Some(ref gid) = state_clone.guild_id {
+                                    maybe_start_voice_gateway(&app_clone, gid).await;
+                                }
+                            }
+                        }
+                    }
+                    state.update_voice_state(state_clone).await;
+                });
+            }
             let _ = app.emit("discord-voice-state-update", data);
         }
         "VOICE_SERVER_UPDATE" => {
+            let app_clone = app.clone();
+            let data_clone = data.clone();
+            tokio::spawn(async move {
+                let state = app_clone.state::<AppState>();
+                let endpoint = data_clone.get("endpoint").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let token = data_clone.get("token").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let guild_id = data_clone.get("guild_id").and_then(|v| v.as_str()).map(|s| s.to_string())
+                    .or_else(|| data_clone.get("channel_id").and_then(|v| v.as_str()).map(|s| s.to_string()));
+
+                if let (Some(ep), Some(tok), Some(gid)) = (endpoint, token, guild_id) {
+                    *state.voice_server_endpoint.write().await = Some(ep);
+                    *state.voice_server_token.write().await = Some(tok);
+                    maybe_start_voice_gateway(&app_clone, &gid).await;
+                }
+            });
             let _ = app.emit("discord-voice-server-update", data);
         }
         "STREAM_CREATE" => {
@@ -400,5 +454,23 @@ fn handle_dispatch_event(app: &AppHandle, event_name: &str, data: &serde_json::V
             let _ = app.emit("discord-stage-instance-delete", data);
         }
         _ => {}
+    }
+}
+
+async fn maybe_start_voice_gateway(app: &AppHandle, guild_id: &str) {
+    let state = app.state::<AppState>();
+    let session_id = state.voice_session_id.read().await.clone();
+    let endpoint = state.voice_server_endpoint.read().await.clone();
+    let token = state.voice_server_token.read().await.clone();
+    let user_id = state.current_user.read().await.as_ref().map(|u| u.id.clone());
+
+    if let (Some(sess), Some(ep), Some(tok), Some(uid)) = (session_id, endpoint, token, user_id) {
+        let mut vg_lock = state.voice_gateway.lock().await;
+        if let Some(old) = vg_lock.take() {
+            old.stop().await;
+        }
+        info!("Starting Voice Gateway client for guild {} at {}", guild_id, ep);
+        let client = VoiceGatewayClient::start(ep, tok, guild_id.to_string(), uid, sess, app.clone());
+        *vg_lock = Some(client);
     }
 }

@@ -1,4 +1,4 @@
-use crate::discord::{Channel, GatewayClient, GatewayCommand, Guild, Message, User};
+use crate::discord::{Channel, GatewayClient, GatewayCommand, Guild, Message, User, VoiceState};
 use crate::state::AppState;
 use tauri::{AppHandle, State};
 
@@ -198,6 +198,10 @@ pub async fn leave_voice(
         *chan_lock = None;
         let mut stream_lock = state.active_stream_key.write().await;
         *stream_lock = None;
+        let mut vg_lock = state.voice_gateway.lock().await;
+        if let Some(vg) = vg_lock.take() {
+            vg.stop().await;
+        }
         Ok(())
     } else {
         Err("Gateway not connected".to_string())
@@ -304,4 +308,20 @@ pub async fn set_presence(status: String, state: State<'_, AppState>) -> Result<
     } else {
         Err("Gateway not connected".to_string())
     }
+}
+
+#[tauri::command]
+pub async fn get_guild_voice_states(
+    guild_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<VoiceState>, String> {
+    Ok(state.get_guild_voice_states(&guild_id).await)
+}
+
+#[tauri::command]
+pub async fn get_channel_voice_states(
+    channel_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<VoiceState>, String> {
+    Ok(state.get_channel_voice_states(&channel_id).await)
 }

@@ -31,6 +31,8 @@ pub fn run() {
             watch_stream,
             set_stream_paused,
             set_presence,
+            get_guild_voice_states,
+            get_channel_voice_states,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

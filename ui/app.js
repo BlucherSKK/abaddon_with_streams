@@ -20,6 +20,7 @@ let isStreaming = false;
 let activeStreams = new Map(); // stream_key -> streamData
 let selectedStreamKey = null;
 let channelVoiceUsers = new Map(); // channel_id -> Set of userIds / user objects
+let currentGuildVoiceStates = new Map(); // user_id -> VoiceState
 let stageViewActive = false;
 
 // DOM Elements
@@ -223,6 +224,36 @@ async function setupGatewayListeners() {
     }
     updateStreamSwitcher();
   });
+
+  await listen("discord-voice-connected", () => {
+    console.log("Voice Gateway connected!");
+    const voiceStatus = document.querySelector(".voice-status-title");
+    if (voiceStatus) {
+      voiceStatus.innerHTML = `<span style="color: var(--green);">●</span><span>Voice Connected (RTC Active)</span>`;
+    }
+  });
+
+  await listen("discord-voice-disconnected", () => {
+    console.log("Voice Gateway disconnected!");
+    const voiceStatus = document.querySelector(".voice-status-title");
+    if (voiceStatus) {
+      voiceStatus.innerHTML = `<span style="color: var(--red);">●</span><span>Voice Disconnected</span>`;
+    }
+  });
+
+  await listen("discord-voice-speaking", (event) => {
+    const data = event.payload;
+    const userId = data.user_id;
+    const isSpeaking = Boolean(data.speaking && data.speaking > 0);
+    const card = document.getElementById(`participant-${userId}`);
+    if (card) {
+      card.classList.toggle("speaking", isSpeaking);
+    }
+    const userRow = document.getElementById(`voice-user-${userId}`);
+    if (userRow) {
+      userRow.classList.toggle("speaking", isSpeaking);
+    }
+  });
 }
 
 // Authentication
@@ -372,6 +403,7 @@ async function selectDmChannel(dm, name) {
 
 async function selectGuild(guild) {
   currentGuildId = guild.id;
+  currentGuildVoiceStates.clear();
   serverNameLabel.innerText = guild.name;
 
   document.querySelectorAll(".server-icon").forEach((el) => el.classList.remove("active"));
@@ -381,12 +413,21 @@ async function selectGuild(guild) {
   channelsList.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 13px;">Loading channels...</div>`;
 
   try {
-    let channels = await invoke("get_channels", { guildId: guild.id });
-    if (!channels || channels.length === 0) {
-      await new Promise(r => setTimeout(r, 600));
-      channels = await invoke("get_channels", { guildId: guild.id });
+    const [channels, vstates] = await Promise.all([
+      invoke("get_channels", { guildId: guild.id }).catch(() => []),
+      invoke("get_guild_voice_states", { guildId: guild.id }).catch(() => []),
+    ]);
+
+    if (vstates && Array.isArray(vstates)) {
+      vstates.forEach((vs) => currentGuildVoiceStates.set(vs.user_id, vs));
     }
-    currentChannels = channels || [];
+
+    let resolvedChannels = channels;
+    if (!resolvedChannels || resolvedChannels.length === 0) {
+      await new Promise((r) => setTimeout(r, 600));
+      resolvedChannels = (await invoke("get_channels", { guildId: guild.id }).catch(() => [])) || [];
+    }
+    currentChannels = resolvedChannels;
     renderChannels(currentChannels);
   } catch (err) {
     console.error("Failed to fetch channels:", err);
@@ -415,11 +456,18 @@ function renderChannels(channels) {
 
   function createChannelElement(c) {
     const type = getChannelType(c);
+    const isVoice = type === 2 || type === 13;
+    const isStage = type === 13;
+    const icon = isStage ? "📡" : (isVoice ? "🔊" : (type === 5 ? "📢" : "#"));
+
+    const wrap = document.createElement("div");
+    wrap.className = "channel-wrapper";
+    wrap.id = `channel-wrap-${c.id}`;
+
     const item = document.createElement("div");
     item.className = "channel-item" + (c.id === currentChannelId ? " active" : "");
-    const isVoice = type === 2 || type === 13;
-    const icon = type === 13 ? "📡" : (isVoice ? "🔊" : (type === 5 ? "📢" : "#"));
-    item.innerHTML = `<span class="channel-icon">${icon}</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${c.name}</span>`;
+    item.setAttribute("data-channel-id", c.id);
+    item.innerHTML = `<span class="channel-icon">${icon}</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(c.name)}</span>`;
     item.addEventListener("click", () => {
       if (isVoice) {
         joinVoiceChannel(c);
@@ -427,7 +475,17 @@ function renderChannels(channels) {
         selectTextChannel(c);
       }
     });
-    return item;
+    wrap.appendChild(item);
+
+    if (isVoice) {
+      const usersContainer = document.createElement("div");
+      usersContainer.className = "voice-channel-users";
+      usersContainer.id = `voice-users-${c.id}`;
+      renderVoiceUsersForChannel(c.id, usersContainer);
+      wrap.appendChild(usersContainer);
+    }
+
+    return wrap;
   }
 
   // Uncategorized channels (top of server)
@@ -441,7 +499,7 @@ function renderChannels(channels) {
   categories.forEach((cat) => {
     const catHeader = document.createElement("div");
     catHeader.className = "channel-category";
-    catHeader.innerHTML = `<span>${(cat.name || "Category").toUpperCase()}</span><span class="category-arrow" style="font-size: 9px; transition: transform 0.2s;">▼</span>`;
+    catHeader.innerHTML = `<span>${escapeHtml((cat.name || "Category").toUpperCase())}</span><span class="category-arrow" style="font-size: 9px; transition: transform 0.2s;">▼</span>`;
     
     const catContainer = document.createElement("div");
     catContainer.className = "category-channels-container";
@@ -483,7 +541,7 @@ async function selectTextChannel(channel) {
   messageTextarea.placeholder = `Message #${channel.name}`;
 
   document.querySelectorAll(".channel-item").forEach((el) => {
-    el.classList.toggle("active", el.innerText.includes(channel.name));
+    el.classList.toggle("active", el.getAttribute("data-channel-id") === channel.id);
   });
 
   toggleStageView(false);
@@ -599,6 +657,11 @@ async function joinVoiceChannel(channel) {
   try {
     activeVoiceChannelId = channel.id;
     activeVoiceGuildId = currentGuildId;
+    currentChannelId = channel.id;
+
+    document.querySelectorAll(".channel-item").forEach((el) => {
+      el.classList.toggle("active", el.getAttribute("data-channel-id") === channel.id);
+    });
 
     await invoke("join_voice", {
       guildId: currentGuildId,
@@ -608,7 +671,8 @@ async function joinVoiceChannel(channel) {
     });
 
     voiceConnectedBar.style.display = "flex";
-    voiceChannelName.innerText = `${channel.name} (${currentGuilds.find(g => g.id === currentGuildId)?.name || 'Guild'})`;
+    const serverName = currentGuilds.find((g) => g.id === currentGuildId)?.name || "Server";
+    voiceChannelName.innerText = `${channel.name} (${serverName})`;
     btnToggleStageView.style.display = "inline-flex";
 
     // Switch view to Stage / Voice
@@ -617,10 +681,40 @@ async function joinVoiceChannel(channel) {
     chatHeaderName.innerText = channel.name;
     chatHeaderTopic.innerText = channel.topic || "Voice Channel";
 
-    // Add current user to participant list
-    if (currentUser) {
-      addParticipantToGrid(currentUser, true);
+    // Clear and populate participantGrid with current members!
+    participantGrid.innerHTML = "";
+
+    let states = [];
+    try {
+      states = await invoke("get_channel_voice_states", { channelId: channel.id });
+    } catch (e) {
+      console.warn("Could not get channel voice states:", e);
     }
+
+    const added = new Set();
+    if (states && states.length > 0) {
+      for (const st of states) {
+        const u = (st.member && st.member.user) || { id: st.user_id, username: st.member?.nick || "User" };
+        const isSelf = currentUser && u.id === currentUser.id;
+        addParticipantToGrid(u, Boolean(st.self_stream), st, isSelf);
+        added.add(u.id);
+      }
+    }
+
+    for (const st of currentGuildVoiceStates.values()) {
+      if (st.channel_id === channel.id && !added.has(st.user_id)) {
+        const u = (st.member && st.member.user) || { id: st.user_id, username: st.member?.nick || "User" };
+        const isSelf = currentUser && u.id === currentUser.id;
+        addParticipantToGrid(u, Boolean(st.self_stream), st, isSelf);
+        added.add(u.id);
+      }
+    }
+
+    if (currentUser && !added.has(currentUser.id)) {
+      addParticipantToGrid(currentUser, false, { self_mute: isMuted, self_deaf: isDeafened }, true);
+    }
+
+    updateVoiceSidebarUsers();
   } catch (err) {
     console.error("Failed to join voice channel:", err);
   }
@@ -644,6 +738,7 @@ async function disconnectVoice() {
   participantGrid.innerHTML = "";
   streamSwitcherBar.innerHTML = "";
   streamPlayerBox.style.display = "none";
+  updateVoiceSidebarUsers();
 }
 
 function toggleStageView(showStage) {
@@ -654,41 +749,125 @@ function toggleStageView(showStage) {
   btnToggleStageView.innerText = showStage ? "💬 Chat" : "🎙️ Stage";
 }
 
-function handleVoiceStateUpdate(state) {
-  if (state.channel_id === activeVoiceChannelId && state.member && state.member.user) {
-    addParticipantToGrid(state.member.user, state.self_stream);
+function renderVoiceUsersForChannel(channelId, container) {
+  if (!container) {
+    container = document.getElementById(`voice-users-${channelId}`);
+  }
+  if (!container) return;
+
+  container.innerHTML = "";
+  for (const st of currentGuildVoiceStates.values()) {
+    if (st.channel_id === channelId) {
+      container.appendChild(createVoiceUserRow(st));
+    }
   }
 }
 
-function addParticipantToGrid(user, isStreamActive) {
+function updateVoiceSidebarUsers() {
+  document.querySelectorAll(".voice-channel-users").forEach((container) => {
+    const channelId = container.id.replace("voice-users-", "");
+    renderVoiceUsersForChannel(channelId, container);
+  });
+}
+
+function createVoiceUserRow(st) {
+  const member = st.member;
+  const user = (member && member.user) || { id: st.user_id, username: member?.nick || "User" };
+  const name = member?.nick || user.global_name || user.username || "User";
+  const avatarUrl = user.avatar
+    ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=32`
+    : null;
+
+  const row = document.createElement("div");
+  row.className = "voice-user-row";
+  row.id = `voice-user-${user.id}`;
+  row.setAttribute("data-user-id", user.id);
+
+  const avatarHtml = avatarUrl
+    ? `<img src="${avatarUrl}" class="voice-avatar" alt="${escapeHtml(name)}">`
+    : `<div class="voice-avatar-placeholder">${escapeHtml(name.charAt(0).toUpperCase())}</div>`;
+
+  const isMuted = Boolean(st.mute || st.self_mute);
+  const isDeaf = Boolean(st.deaf || st.self_deaf);
+  const isLive = Boolean(st.self_stream);
+
+  let iconsHtml = "";
+  if (isLive) iconsHtml += `<span class="live-pill">LIVE</span>`;
+  if (isDeaf) iconsHtml += `<span class="voice-icon-deaf" title="Deafened">🎧</span>`;
+  else if (isMuted) iconsHtml += `<span class="voice-icon-muted" title="Muted">🔇</span>`;
+
+  row.innerHTML = `
+    <div class="voice-user-avatar-wrap">
+      ${avatarHtml}
+    </div>
+    <span class="voice-user-name">${escapeHtml(name)}</span>
+    <div class="voice-user-icons">${iconsHtml}</div>
+  `;
+  return row;
+}
+
+function handleVoiceStateUpdate(state) {
+  if (!state.channel_id) {
+    currentGuildVoiceStates.delete(state.user_id);
+  } else {
+    currentGuildVoiceStates.set(state.user_id, state);
+  }
+
+  updateVoiceSidebarUsers();
+
+  if (activeVoiceChannelId) {
+    if (state.channel_id === activeVoiceChannelId) {
+      const u = (state.member && state.member.user) || { id: state.user_id, username: state.member?.nick || "User" };
+      const isSelf = currentUser && u.id === currentUser.id;
+      addParticipantToGrid(u, Boolean(state.self_stream), state, isSelf);
+    } else {
+      removeParticipantFromGrid(state.user_id);
+    }
+  }
+}
+
+function addParticipantToGrid(user, isStreamActive, voiceState, isSelf) {
   let card = document.getElementById(`participant-${user.id}`);
+  const name = voiceState?.member?.nick || user.global_name || user.username || "User";
+  const avatarUrl = user.avatar
+    ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128`
+    : null;
+
+  const isMuted = voiceState ? Boolean(voiceState.mute || voiceState.self_mute) : false;
+  const isDeaf = voiceState ? Boolean(voiceState.deaf || voiceState.self_deaf) : false;
+
   if (!card) {
     card = document.createElement("div");
     card.id = `participant-${user.id}`;
-    card.className = "participant-card";
-
-    const avatar = document.createElement("div");
-    avatar.className = "participant-avatar";
-    if (user.avatar) {
-      avatar.innerHTML = `<img src="https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=96" alt="${user.username}">`;
-    } else {
-      avatar.innerText = user.username.charAt(0).toUpperCase();
-    }
-
-    const name = document.createElement("div");
-    name.className = "participant-name";
-    name.innerText = user.global_name || user.username;
-
-    const badges = document.createElement("div");
-    badges.className = "participant-badges";
-    if (isStreamActive) {
-      badges.innerHTML = `<span style="background: var(--red); color: white; font-size: 9px; font-weight: bold; padding: 2px 4px; border-radius: 4px;">LIVE</span>`;
-    }
-
-    card.appendChild(badges);
-    card.appendChild(avatar);
-    card.appendChild(name);
+    card.className = "participant-card" + (isSelf ? " is-self" : "");
     participantGrid.appendChild(card);
+  }
+
+  const avatarHtml = avatarUrl
+    ? `<img src="${avatarUrl}" alt="${escapeHtml(name)}">`
+    : `<div class="avatar-placeholder">${escapeHtml(name.charAt(0).toUpperCase())}</div>`;
+
+  let badgesHtml = "";
+  if (isStreamActive) {
+    badgesHtml += `<span class="badge-live">LIVE</span>`;
+  }
+  if (isDeaf) {
+    badgesHtml += `<span class="badge-status" title="Deafened">🎧</span>`;
+  } else if (isMuted) {
+    badgesHtml += `<span class="badge-status" title="Muted">🔇</span>`;
+  }
+
+  card.innerHTML = `
+    <div class="participant-badges">${badgesHtml}</div>
+    <div class="participant-avatar">${avatarHtml}</div>
+    <div class="participant-name">${escapeHtml(name)}${isSelf ? " (You)" : ""}</div>
+  `;
+}
+
+function removeParticipantFromGrid(userId) {
+  const card = document.getElementById(`participant-${userId}`);
+  if (card) {
+    card.remove();
   }
 }
 
@@ -781,6 +960,16 @@ function startStreamCanvasAnimation() {
 
 function getInitials(name) {
   return name.split(/\s+/).map(w => w[0]).join('').slice(0, 3).toUpperCase();
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 // Start app on DOMContentLoaded
