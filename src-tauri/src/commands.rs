@@ -349,3 +349,17 @@ pub async fn get_user(
         Err(e) => Err(format!("Failed to fetch user: {}", e)),
     }
 }
+
+#[tauri::command]
+pub async fn set_speaking(
+    speaking: bool,
+    delay: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vg_lock = state.voice_gateway.lock().await;
+    if let Some(ref vg) = *vg_lock {
+        vg.set_speaking(speaking, delay.unwrap_or(0)).await;
+    }
+    Ok(())
+}
+

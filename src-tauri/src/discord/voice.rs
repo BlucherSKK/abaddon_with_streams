@@ -70,6 +70,10 @@ impl VoiceGatewayClient {
         self.is_running.store(false, Ordering::Relaxed);
         let _ = self.cmd_tx.send(VoiceGatewayCommand::Disconnect).await;
     }
+
+    pub async fn set_speaking(&self, speaking: bool, delay: u32) {
+        let _ = self.cmd_tx.send(VoiceGatewayCommand::SetSpeaking { speaking, delay }).await;
+    }
 }
 
 async fn run_voice_loop(
@@ -231,6 +235,19 @@ async fn run_voice_loop(
                                                             }
                                                             client_port = u16::from_be_bytes([resp[72], resp[73]]);
                                                             info!("Voice UDP discovery resolved external address: {}:{}", client_ip, client_port);
+                                                        }
+                                                    }
+                                                }
+
+                                                if client_ip == discord_ip {
+                                                    warn!("Voice UDP discovery did not resolve client IP, querying fallback external IP...");
+                                                    if let Ok(resp) = reqwest::get("https://api.ipify.org").await {
+                                                        if let Ok(ip_text) = resp.text().await {
+                                                            let trimmed = ip_text.trim();
+                                                            if !trimmed.is_empty() {
+                                                                client_ip = trimmed.to_string();
+                                                                info!("Voice fallback resolved external IP: {}", client_ip);
+                                                            }
                                                         }
                                                     }
                                                 }

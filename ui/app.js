@@ -18,6 +18,7 @@ let activeVoiceGuildId = null;
 let isMuted = false;
 let isDeafened = false;
 let isStreaming = false;
+let activeLocalStream = null;
 let activeStreams = new Map(); // stream_key -> streamData
 let selectedStreamKey = null;
 let currentGuildVoiceStates = new Map(); // user_id -> VoiceState
@@ -28,6 +29,13 @@ let membersSidebarOpen = true;
 let replyingToMessage = null;
 let currentStatus = "online";
 let micTestInterval = null;
+
+// Microphone audio & Voice Activity Detection (VAD)
+let micStream = null;
+let audioCtx = null;
+let vadInterval = null;
+let localSpeaking = false;
+let silenceTimeout = null;
 
 // Emoji Dataset
 const EMOJI_CATEGORIES = {
@@ -120,7 +128,10 @@ const dmNav = document.getElementById("dm-nav");
 const btnDmFriends = document.getElementById("btn-dm-friends");
 const btnDmNitro = document.getElementById("btn-dm-nitro");
 const badgeFriendsCount = document.getElementById("badge-friends-count");
+const btnQuickJumpDm = document.getElementById("btn-quick-jump-dm");
 const channelsList = document.getElementById("channels-list");
+const channelsBar = document.getElementById("channels-bar");
+const channelsResizer = document.getElementById("channels-resizer");
 
 const voiceConnectedBar = document.getElementById("voice-connected-bar");
 const voiceChannelName = document.getElementById("voice-channel-name");
@@ -142,6 +153,7 @@ const userStatusMenu = document.getElementById("user-status-menu");
 const chatHeaderIcon = document.getElementById("chat-header-icon");
 const chatHeaderName = document.getElementById("chat-header-name");
 const chatHeaderTopic = document.getElementById("chat-header-topic");
+const btnBackToFriends = document.getElementById("btn-back-to-friends");
 const btnToggleStageView = document.getElementById("btn-toggle-stage-view");
 const btnToggleMembers = document.getElementById("btn-toggle-members");
 const btnHeaderCall = document.getElementById("btn-header-call");
@@ -165,9 +177,11 @@ const btnSendFriendRequest = document.getElementById("btn-send-friend-request");
 const stageContainer = document.getElementById("stage-container");
 const streamSwitcherBar = document.getElementById("stream-switcher-bar");
 const streamPlayerBox = document.getElementById("stream-player-box");
+const streamVideo = document.getElementById("stream-video");
 const streamCanvas = document.getElementById("stream-canvas");
 const streamTitleText = document.getElementById("stream-title-text");
 const streamUserText = document.getElementById("stream-user-text");
+const btnStreamFullscreen = document.getElementById("btn-stream-fullscreen");
 const btnStreamExit = document.getElementById("btn-stream-exit");
 const participantGrid = document.getElementById("participant-grid");
 const btnStageMic = document.getElementById("btn-stage-mic");
@@ -193,6 +207,7 @@ const emojiPickerPopover = document.getElementById("emoji-picker-popover");
 const emojiSearchInput = document.getElementById("emoji-search-input");
 const emojiGrid = document.getElementById("emoji-grid");
 
+const membersResizer = document.getElementById("members-resizer");
 const membersSidebar = document.getElementById("members-sidebar");
 const membersContainer = document.getElementById("members-container");
 
@@ -211,6 +226,7 @@ const proxyStatusMsg = document.getElementById("proxy-status-message");
 // Initialize application
 async function init() {
   loadSettings();
+  setupResizablePanels();
   setupEventListeners();
   setupSettingsModal();
   setupEmojiPicker();
@@ -220,6 +236,85 @@ async function init() {
   if (savedToken) {
     tokenInput.value = savedToken;
     await performLogin(savedToken);
+  }
+}
+
+// Draggable Resizable Panels Setup
+function setupResizablePanels() {
+  // Load saved widths
+  const savedChannelsWidth = localStorage.getItem("abaddon_channels_width");
+  if (savedChannelsWidth && channelsBar) {
+    channelsBar.style.width = savedChannelsWidth + "px";
+  }
+  const savedMembersWidth = localStorage.getItem("abaddon_members_width");
+  if (savedMembersWidth && membersSidebar) {
+    membersSidebar.style.width = savedMembersWidth + "px";
+  }
+
+  // Channels Bar Resizer (Drag left-to-right)
+  if (channelsResizer && channelsBar) {
+    let isDragging = false;
+    channelsResizer.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      isDragging = true;
+      channelsResizer.classList.add("resizing");
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const onMouseMove = (ev) => {
+        if (!isDragging) return;
+        const newWidth = Math.max(180, Math.min(500, ev.clientX - 72)); // 72px is servers sidebar
+        channelsBar.style.width = `${newWidth}px`;
+      };
+
+      const onMouseUp = () => {
+        if (isDragging) {
+          isDragging = false;
+          channelsResizer.classList.remove("resizing");
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+          localStorage.setItem("abaddon_channels_width", parseInt(channelsBar.style.width, 10));
+          window.removeEventListener("mousemove", onMouseMove);
+          window.removeEventListener("mouseup", onMouseUp);
+        }
+      };
+
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    });
+  }
+
+  // Members Sidebar Resizer (Drag right-to-left)
+  if (membersResizer && membersSidebar) {
+    let isDragging = false;
+    membersResizer.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      isDragging = true;
+      membersResizer.classList.add("resizing");
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const onMouseMove = (ev) => {
+        if (!isDragging) return;
+        const newWidth = Math.max(180, Math.min(450, window.innerWidth - ev.clientX));
+        membersSidebar.style.width = `${newWidth}px`;
+      };
+
+      const onMouseUp = () => {
+        if (isDragging) {
+          isDragging = false;
+          membersResizer.classList.remove("resizing");
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+          localStorage.setItem("abaddon_members_width", parseInt(membersSidebar.style.width, 10));
+          window.removeEventListener("mousemove", onMouseMove);
+          window.removeEventListener("mouseup", onMouseUp);
+        }
+      };
+
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    });
   }
 }
 
@@ -299,9 +394,19 @@ function setupEventListeners() {
     }
   });
 
-  // Direct Messages Button
+  // Direct Messages Top Button (Discord Logo)
   btnDm.addEventListener("click", () => {
     selectDmHome();
+  });
+
+  // Quick Jump to DMs Button in Channels Sidebar
+  btnQuickJumpDm?.addEventListener("click", () => {
+    selectDmHome();
+  });
+
+  // Back to Friends button in Chat Header
+  btnBackToFriends?.addEventListener("click", () => {
+    showFriendsView();
   });
 
   // Send Message
@@ -339,6 +444,14 @@ function setupEventListeners() {
     isMuted = !isMuted;
     btnUserMic.classList.toggle("active", isMuted);
     btnStageMic.classList.toggle("active", isMuted);
+    if (micStream) {
+      micStream.getAudioTracks().forEach((track) => {
+        track.enabled = !isMuted;
+      });
+    }
+    if (isMuted && localSpeaking) {
+      setLocalSpeaking(false);
+    }
     if (activeVoiceChannelId) {
       await invoke("join_voice", {
         guildId: activeVoiceGuildId,
@@ -352,6 +465,11 @@ function setupEventListeners() {
   btnUserDeaf.addEventListener("click", async () => {
     isDeafened = !isDeafened;
     btnUserDeaf.classList.toggle("active", isDeafened);
+    if (micStream) {
+      micStream.getAudioTracks().forEach((track) => {
+        track.enabled = !isDeafened && !isMuted;
+      });
+    }
     if (activeVoiceChannelId) {
       await invoke("join_voice", {
         guildId: activeVoiceGuildId,
@@ -437,12 +555,26 @@ function setupEventListeners() {
     toggleStreamState();
   });
 
+  // Fullscreen video toggle
+  btnStreamFullscreen?.addEventListener("click", () => {
+    if (streamVideo && streamVideo.style.display !== "none") {
+      if (streamVideo.requestFullscreen) {
+        streamVideo.requestFullscreen();
+      }
+    } else if (streamPlayerBox) {
+      if (streamPlayerBox.requestFullscreen) {
+        streamPlayerBox.requestFullscreen();
+      }
+    }
+  });
+
   // Stage View Toggle
   btnToggleStageView.addEventListener("click", () => {
     toggleStageView(!stageViewActive);
   });
 
-  btnStreamExit.addEventListener("click", () => {
+  btnStreamExit.addEventListener("click", async () => {
+    await stopActiveLocalStream();
     selectedStreamKey = null;
     streamPlayerBox.style.display = "none";
     updateStreamSwitcher();
@@ -452,6 +584,7 @@ function setupEventListeners() {
   btnToggleMembers.addEventListener("click", () => {
     membersSidebarOpen = !membersSidebarOpen;
     membersSidebar.style.display = membersSidebarOpen ? "flex" : "none";
+    if (membersResizer) membersResizer.style.display = membersSidebarOpen ? "block" : "none";
     btnToggleMembers.classList.toggle("active", membersSidebarOpen);
   });
 
@@ -526,22 +659,183 @@ function setReply(msg) {
   messageTextarea.focus();
 }
 
+// Real Screen Sharing / Streaming
 async function toggleStreamState() {
-  if (!activeVoiceChannelId) return;
-  if (isStreaming) {
-    await invoke("stop_stream");
-    isStreaming = false;
-    btnStreamToggle.classList.remove("active");
-    btnStageShare.classList.remove("active");
-  } else {
-    await invoke("start_stream", {
-      guildId: activeVoiceGuildId,
-      channelId: activeVoiceChannelId,
-    });
-    isStreaming = true;
-    btnStreamToggle.classList.add("active");
-    btnStageShare.classList.add("active");
+  if (!activeVoiceChannelId) {
+    alert("Please join a voice channel before sharing your screen.");
+    return;
   }
+
+  if (activeLocalStream) {
+    await stopActiveLocalStream();
+  } else {
+    try {
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: "always" },
+        audio: true
+      });
+
+      activeLocalStream = displayStream;
+      isStreaming = true;
+
+      if (streamVideo) {
+        streamVideo.srcObject = displayStream;
+        streamVideo.style.display = "block";
+      }
+      if (streamCanvas) {
+        streamCanvas.style.display = "none";
+      }
+
+      streamPlayerBox.style.display = "flex";
+      streamTitleText.innerText = "Screen Share (Live)";
+      streamUserText.innerText = currentUser?.global_name || currentUser?.username || "You";
+
+      toggleStageView(true);
+      btnStreamToggle.classList.add("active");
+      btnStageShare.classList.add("active");
+
+      // Notify Discord Gateway of stream start
+      await invoke("start_stream", {
+        guildId: activeVoiceGuildId,
+        channelId: activeVoiceChannelId
+      });
+
+      // Mark self card with LIVE badge
+      if (currentUser) {
+        const selfCard = document.getElementById(`participant-${currentUser.id}`);
+        if (selfCard) {
+          let badgesEl = selfCard.querySelector(".participant-badges");
+          if (badgesEl && !badgesEl.querySelector(".badge-live")) {
+            badgesEl.innerHTML = `<span class="badge-live">LIVE</span>` + badgesEl.innerHTML;
+          }
+        }
+      }
+
+      // Automatically clean up when user clicks browser/OS Stop sharing
+      displayStream.getVideoTracks()[0].onended = async () => {
+        await stopActiveLocalStream();
+      };
+
+      updateStreamSwitcher();
+    } catch (err) {
+      console.warn("Screen share cancelled or failed:", err);
+    }
+  }
+}
+
+async function stopActiveLocalStream() {
+  if (activeLocalStream) {
+    activeLocalStream.getTracks().forEach((t) => t.stop());
+    activeLocalStream = null;
+  }
+  isStreaming = false;
+
+  if (streamVideo) {
+    streamVideo.srcObject = null;
+    streamVideo.style.display = "none";
+  }
+
+  btnStreamToggle.classList.remove("active");
+  btnStageShare.classList.remove("active");
+
+  try {
+    await invoke("stop_stream");
+  } catch (e) {}
+
+  if (currentUser) {
+    const selfCard = document.getElementById(`participant-${currentUser.id}`);
+    if (selfCard) {
+      const liveBadge = selfCard.querySelector(".badge-live");
+      if (liveBadge) liveBadge.remove();
+    }
+  }
+}
+
+// Real Microphone capture with Voice Activity Detection (VAD)
+async function startMicrophoneAudio() {
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    });
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioCtx.createMediaStreamSource(micStream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    if (vadInterval) clearInterval(vadInterval);
+    vadInterval = setInterval(() => {
+      if (isMuted || isDeafened) {
+        if (localSpeaking) setLocalSpeaking(false);
+        return;
+      }
+
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i];
+      }
+      const avg = sum / dataArray.length;
+
+      // Threshold for human voice
+      if (avg > 14) {
+        if (silenceTimeout) {
+          clearTimeout(silenceTimeout);
+          silenceTimeout = null;
+        }
+        if (!localSpeaking) {
+          setLocalSpeaking(true);
+        }
+      } else {
+        if (localSpeaking && !silenceTimeout) {
+          silenceTimeout = setTimeout(() => {
+            setLocalSpeaking(false);
+            silenceTimeout = null;
+          }, 350);
+        }
+      }
+    }, 50);
+  } catch (err) {
+    console.warn("Could not access microphone input device:", err);
+  }
+}
+
+function stopMicrophoneAudio() {
+  if (vadInterval) {
+    clearInterval(vadInterval);
+    vadInterval = null;
+  }
+  if (silenceTimeout) {
+    clearTimeout(silenceTimeout);
+    silenceTimeout = null;
+  }
+  if (micStream) {
+    micStream.getTracks().forEach((t) => t.stop());
+    micStream = null;
+  }
+  if (audioCtx) {
+    audioCtx.close().catch(() => {});
+    audioCtx = null;
+  }
+  setLocalSpeaking(false);
+}
+
+function setLocalSpeaking(speaking) {
+  localSpeaking = speaking;
+  if (currentUser) {
+    const card = document.getElementById(`participant-${currentUser.id}`);
+    if (card) card.classList.toggle("speaking", speaking);
+    const row = document.getElementById(`voice-user-${currentUser.id}`);
+    if (row) row.classList.toggle("speaking", speaking);
+  }
+  invoke("set_speaking", { speaking, delay: 0 }).catch(() => {});
 }
 
 // Settings Modal Management
@@ -809,7 +1103,7 @@ async function setupGatewayListeners() {
       cachedUsers.set(msg.author.id, msg.author);
     }
     if (msg.channel_id === currentChannelId) {
-      appendMessage(msg);
+      appendMessage(msg, localStorage.getItem("abaddon_display") === "compact");
       messagesList.scrollTop = messagesList.scrollHeight;
     }
   });
@@ -1002,6 +1296,7 @@ function showFriendsView() {
   chatHeaderTopic.innerText = "";
   btnHeaderCall.style.display = "none";
   btnHeaderVideocall.style.display = "none";
+  if (btnBackToFriends) btnBackToFriends.style.display = "none";
 
   friendsView.style.display = "flex";
   messagesList.style.display = "none";
@@ -1100,6 +1395,7 @@ async function selectDmChannel(dm, name) {
   messageTextarea.placeholder = `Message @${name}`;
   btnHeaderCall.style.display = "inline-flex";
   btnHeaderVideocall.style.display = "inline-flex";
+  if (btnBackToFriends) btnBackToFriends.style.display = "inline-flex";
 
   document.querySelectorAll(".channel-item").forEach((el) => {
     el.classList.toggle("active", el.innerText.includes(name));
@@ -1128,6 +1424,7 @@ async function selectGuild(guild) {
   friendsView.style.display = "none";
   btnHeaderCall.style.display = "none";
   btnHeaderVideocall.style.display = "none";
+  if (btnBackToFriends) btnBackToFriends.style.display = "none";
 
   document.querySelectorAll(".server-icon").forEach((el) => el.classList.remove("active"));
   const clickedIcon = Array.from(guildsContainer.children).find((c) => c.title === guild.name);
@@ -1264,6 +1561,7 @@ async function selectTextChannel(channel) {
   friendsView.style.display = "none";
   messagesList.style.display = "flex";
   chatInputBar.style.display = "block";
+  if (btnBackToFriends) btnBackToFriends.style.display = "none";
 
   chatHeaderIcon.innerText = "#";
   chatHeaderName.innerText = channel.name;
@@ -1419,7 +1717,6 @@ function renderMembersList() {
   const offlineMembers = [];
 
   if (currentGuildId) {
-    // Collect users in this guild
     const seen = new Set();
     currentGuildVoiceStates.forEach((vs) => {
       const u = resolveUser(vs.user_id, vs.member);
@@ -1432,7 +1729,6 @@ function renderMembersList() {
       }
     });
   } else {
-    // Direct messages
     if (currentUser) onlineMembers.push(currentUser);
     currentDms.forEach((dm) => {
       if (dm.recipients) {
@@ -1504,6 +1800,9 @@ async function joinVoiceChannel(channel) {
       deaf: isDeafened,
     });
 
+    // Start real microphone capture & VAD
+    startMicrophoneAudio();
+
     voiceConnectedBar.style.display = "flex";
     if (voiceErrorBanner) voiceErrorBanner.style.display = "none";
     const serverName = currentGuilds.find((g) => g.id === currentGuildId)?.name || "Server";
@@ -1541,7 +1840,7 @@ async function joinVoiceChannel(channel) {
     }
 
     if (currentUser && !added.has(currentUser.id)) {
-      addParticipantToGrid(currentUser, false, { self_mute: isMuted, self_deaf: isDeafened }, true);
+      addParticipantToGrid(currentUser, isStreaming, { self_mute: isMuted, self_deaf: isDeafened }, true);
     }
 
     updateVoiceSidebarUsers();
@@ -1551,12 +1850,10 @@ async function joinVoiceChannel(channel) {
 }
 
 async function disconnectVoice() {
+  stopMicrophoneAudio();
+  await stopActiveLocalStream();
+
   try {
-    if (isStreaming) {
-      await invoke("stop_stream");
-      isStreaming = false;
-      btnStreamToggle.classList.remove("active");
-    }
     await invoke("leave_voice", { guildId: activeVoiceGuildId });
   } catch (e) {}
 
@@ -1710,7 +2007,22 @@ function removeParticipantFromGrid(userId) {
 // Stream Switcher & Stage Player
 function updateStreamSwitcher() {
   streamSwitcherBar.innerHTML = "";
-  if (activeStreams.size === 0) return;
+  if (!activeLocalStream && activeStreams.size === 0) return;
+
+  if (activeLocalStream) {
+    const chip = document.createElement("div");
+    chip.className = "stream-chip active";
+    chip.innerHTML = `
+      <span class="live-badge">LIVE</span>
+      <span style="font-weight: 600; color: #fff;">Your Screen</span>
+    `;
+    chip.addEventListener("click", () => {
+      if (streamVideo) streamVideo.style.display = "block";
+      if (streamCanvas) streamCanvas.style.display = "none";
+      streamPlayerBox.style.display = "flex";
+    });
+    streamSwitcherBar.appendChild(chip);
+  }
 
   activeStreams.forEach((stream, key) => {
     const chip = document.createElement("div");
@@ -1740,7 +2052,14 @@ async function selectStreamPlayer(streamKey, streamData) {
   streamTitleText.innerText = "Live Stream";
   streamUserText.innerText = `Stream Key: ${streamKey}`;
 
-  startStreamCanvasAnimation();
+  if (activeLocalStream) {
+    if (streamVideo) streamVideo.style.display = "block";
+    if (streamCanvas) streamCanvas.style.display = "none";
+  } else {
+    if (streamVideo) streamVideo.style.display = "none";
+    if (streamCanvas) streamCanvas.style.display = "block";
+    startStreamCanvasAnimation();
+  }
 }
 
 let canvasAnimId = null;
@@ -1783,7 +2102,7 @@ function startStreamCanvasAnimation() {
     ctx.font = "12px sans-serif";
     ctx.fillText("Receiving video and audio stream packets", streamCanvas.width / 2, centerY + 50);
 
-    if (streamPlayerBox.style.display !== "none") {
+    if (streamPlayerBox.style.display !== "none" && (!activeLocalStream || streamCanvas.style.display !== "none")) {
       canvasAnimId = requestAnimationFrame(renderFrame);
     }
   }

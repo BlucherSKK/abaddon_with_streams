@@ -79,6 +79,12 @@
         </div>
       </div>
 
+      <!-- QUICK JUMP TO DMs BUTTON (Visible in Servers) -->
+      <div id="btn-quick-jump-dm" class="dm-quick-jump-btn" title="Перейти в личные сообщения (DMs)">
+        <span class="quick-jump-icon">💬</span>
+        <span class="quick-jump-label">Личные сообщения (ЛС)</span>
+      </div>
+
       <!-- CHANNELS LIST -->
       <div id="channels-list">
         <!-- Channels list populated dynamically -->
@@ -162,10 +168,14 @@
       </div>
     </div>
 
+    <!-- RESIZE GUTTER BETWEEN CHANNELS AND MAIN AREA -->
+    <div id="channels-resizer" class="resizer-col" title="Перетащите для изменения ширины"></div>
+
     <!-- MAIN CONTENT AREA -->
     <div id="main-area">
       <!-- HEADER BAR -->
       <div id="chat-header">
+        <button class="btn-header-tool" id="btn-back-to-friends" style="display: none; margin-right: 8px; font-weight: 600; padding: 4px 8px; font-size: 13px;" title="Вернуться к списку друзей">← Друзья</button>
         <div class="channel-title">
           <span id="chat-header-icon">#</span>
           <span id="chat-header-name">select-a-channel</span>
@@ -223,6 +233,7 @@
           <div id="stage-container" style="display: none;">
             <div id="stream-switcher-bar"></div>
             <div id="stream-player-box" style="display: none;">
+              <video id="stream-video" autoplay playsinline style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
               <canvas id="stream-canvas"></canvas>
               <div class="stream-overlay">
                 <div class="stream-info">
@@ -230,7 +241,8 @@
                   <span class="stream-subtitle" id="stream-user-text">Streamer</span>
                 </div>
                 <div class="stream-actions">
-                  <button class="btn-send" id="btn-stream-exit" style="background: var(--red);">Exit Stream</button>
+                  <button class="btn-send" id="btn-stream-fullscreen" style="background: var(--bg-hover);">⛶ Fullscreen</button>
+                  <button class="btn-send" id="btn-stream-exit" style="background: var(--red);">Stop / Exit</button>
                 </div>
               </div>
             </div>
@@ -296,6 +308,9 @@
             </div>
           </div>
         </div>
+
+        <!-- RESIZE GUTTER BETWEEN CHAT AND MEMBERS SIDEBAR -->
+        <div id="members-resizer" class="resizer-col" title="Перетащите для изменения ширины"></div>
 
         <!-- RIGHT MEMBERS SIDEBAR -->
         <div id="members-sidebar">
