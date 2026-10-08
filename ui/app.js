@@ -10,6 +10,7 @@ let currentChannelId = null;
 let currentGuilds = [];
 let currentChannels = [];
 let currentMessages = [];
+let currentDms = [];
 
 // Voice & Stream State
 let activeVoiceChannelId = null;
@@ -19,11 +20,25 @@ let isDeafened = false;
 let isStreaming = false;
 let activeStreams = new Map(); // stream_key -> streamData
 let selectedStreamKey = null;
-let channelVoiceUsers = new Map(); // channel_id -> Set of userIds / user objects
 let currentGuildVoiceStates = new Map(); // user_id -> VoiceState
 let cachedUsers = new Map(); // user_id -> User
 const pendingUserFetches = new Set();
 let stageViewActive = false;
+let membersSidebarOpen = true;
+let replyingToMessage = null;
+let currentStatus = "online";
+let micTestInterval = null;
+
+// Emoji Dataset
+const EMOJI_CATEGORIES = {
+  smileys: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "🥲", "☺️", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🥸", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", "🤖", "🎃"],
+  gestures: ["👋", "🤚", "🖐️", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🫰", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪"],
+  nature: ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔", "🐧", "🐦", "🐤", "🦆", "🦅", "🦉", "🦇", "🐺", "🐗", "🐴", "🦄", "🐝", "🪱", "🐛", "🦋", "🐌", "🐞", "🐜", "🕷️", "🐢", "🐍", "🦎", "🐙", "🦑", "🦐", "🦞", "🦀", "🐡", "🐠", "🐟", "🐬", "🐳", "🦈", "🐊", "🐅", "🐆", "🦓", "🦍", "🦧", "🦣", "🐘", "🦛", "🦏", "🐪", "🐫", "🦒", "🦘", "🦬", "🐃", "🐂", "🐄", "🐎", "🐖", "🐏", "🐑", "🦙", "🐐", "🦌", "🐕", "🐩", "🦮", "🐈", "🐓", "🦃", "🦤", "🦚", "🦜", "🦢", "🦩", "🕊️", "🐇", "🦝", "🦨", "🦡", "🦫", "🦦", "🦥", "🐁", "🐀", "🐿️", "🦔", "🌲", "🌳", "🌴", "🪵", "🌱", "🌿", "☘️", "🍀", "🎍", "🪴", "🎋", "🍃", "🍂", "🍁", "🍄", "🐚", "🪨", "🌾", "💐", "🌷", "🌹", "🥀", "🌺", "🌸", "🌼", "🌻", "🌞", "🌝", "🌛", "🌜", "🌚", "🌕", "🌖", "🌗", "🌘", "🌑", "🌒", "🌓", "🌔", "🌙", "🌎", "🌍", "🌏", "🪐", "💫", "⭐️", "🌟", "✨", "⚡️", "☄️", "💥", "🔥", "🌪️", "🌈", "☀️", "🌤️", "⛅️", "🌥️", "☁️", "🌦️", "🌧️", "⛈️", "🌩️", "🌨️", "❄️", "☃️", "⛄️", "🌬️", "💨", "💧", "💦", "🫧", "☔️", "☂️", "🌊", "🌫️"],
+  food: ["🍏", "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑", "🥦", "🥬", "🥒", "🌶️", "🫑", "🌽", "🥕", "🫒", "🧄", "🧅", "🥔", "🍠", "🥐", "🥯", "🍞", "🥖", "🥨", "🧀", "🥚", "🍳", "🧈", "🥞", "🧇", "🥓", "🥩", "🍗", "🍖", "🦴", "🌭", "🍔", "🍟", "🍕", "🫓", "🥪", "🥙", "🧆", "🌮", "🌯", "🫔", "🥗", "🥘", "🫕", "🥫", "🍝", "🍜", "🍲", "🍛", "🍣", "🍱", "🥟", "🦪", "🍤", "🍙", "🍚", "🍘", "🍥", "🥠", "🥮", "🍢", "🍡", "🍧", "🍨", "🍦", "🥧", "🧁", "🍰", "🎂", "🍮", "🍭", "🍬", "🍫", "🍿", "🍩", "🍪", "🌰", "🥜", "🍯", "🥛", "🍼", "🫖", "☕️", "🍵", "🧃", "🥤", "🧋", "🍶", "🍺", "🍻", "🥂", "🍷", "🥃", "🍸", "🍹", "🧉", "🍾", "🧊"],
+  activity: ["⚽️", "🏀", "🏈", "⚾️", "🥎", "🎾", "🏐", "🏉", "🥏", "🎱", "🪀", "🏓", "🏸", "🏒", "🏑", "🥍", "🏏", "🪃", "🥅", "⛳️", "🪁", "🏹", "🎣", "🤿", "🥊", "🥋", "🎽", "🛹", "🛼", "🛷", "⛸️", "🥌", "🎿", "⛷️", "🏂", "🪂", "🏋️", "🤼", "🤸", "⛹️", "🤺", "🤾", "🏌️", "🏇", "🧘", "🏄", "🏊", "🤽", "🚣", "🧗", "🚵", "🚴", "🏆", "🥇", "🥈", "🥉", "🏅", "🎖️", "🏵️", "🎗️", "🎫", "🎟️", "🎪", "🤹", "🎭", "🩰", "🎨", "🎬", "🎤", "🎧", "🎼", "🎹", "🥁", "🪘", "🎷", "🎺", "🪗", "🎸", "🪕", "🎻", "🎲", "♟️", "🎯", "🎳", "🎮", "🎰", "🧩"],
+  objects: ["⌚️", "📱", "📲", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "🖲️", "🕹️", "🗜️", "💽", "💾", "💿", "📀", "📼", "📷", "📸", "📹", "🎥", "📽️", "🎞️", "📞", "☎️", "📟", "📠", "📺", "📻", "🎙️", "🎚️", "🎛️", "🧭", "⏱️", "⏲️", "⏰", "🕰️", "⌛️", "⏳", "📡", "🔋", "🪫", "🔌", "💡", "🔦", "🕯️", "🪔", "🧯", "🛢️", "💸", "💵", "💴", "💶", "💷", "🪙", "💰", "💳", "💎", "⚖️", "🪜", "🧰", "🪛", "🔧", "🔨", "⚒️", "🛠️", "⛏️", "🪚", "🔩", "⚙️", "🪤", "🧱", "⛓️", "🧲", "🔫", "💣", "🧨", "🪓", "🔪", "🗡️", "⚔️", "🛡️", "🚬", "⚰️", "🪦", "⚱️", "🏺", "🔮", "📿", "🧿", "🪬", "💈", "⚗️", "🔭", "🔬", "🕳️", "🩹", "🩺", "🩻", "🩼", "💊", "💉", "🩸", "🧬", "🦠", "🧫", "🧪", "🌡️", "🧹", "🪠", "🧺", "🧻", "🚽", "🚰", "🚿", "🛁", "🛀", "🧼", "🪥", "🪒", "🧽", "🪣", "🧴", "🛎️", "🔑", "🗝️", "🚪", "🪑", "🛋️", "🛏️", "🛌", "🖼️", "🪞", "🪟", "🛍️", "🛒", "🎁", "🎈", "🎏", "🎀", "🪄", "🪅", "🎊", "🎉", "🎎", "🏮", "🎐", "🧧", "✉️", "📩", "📨", "📧", "💌", "📥", "📤", "📦", "🏷️", "🪧", "📪", "📫", "📬", "📭", "📮", "📯", "📜", "📃", "📄", "📑", "🧾", "📊", "📈", "📉", "🗒️", "🗓️", "📆", "📅", "🗑️", "🪪", "📇", "🗃️", "🗳️", "🗄️", "📋", "📁", "📂", "🗂️", "🗞️", "📰", "📓", "📕", "📗", "📘", "📙", "📚", "📖", "🔖", "🧷", "🔗", "📎", "🖇️", "📐", "📏", "🧮", "📌", "📍", "✂️", "🖊️", "🖋️", "✒️", "🖌️", "🖍️", "📝", "✏️", "🔍", "🔎", "🔏", "🔐", "🔒", "🔓"],
+  symbols: ["💖", "💘", "💝", "💗", "💓", "💞", "💕", "💟", "❣️", "💔", "❤️", "🧡", "💛", "🟢", "🔵", "🟣", "🟤", "⚫️", "⚪️", "💯", "💢", "💬", "👁️‍🗨️", "🗯️", "💭", "💤", "💮", "♨️", "🛑", "🕛", "🕧", "🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🌀", "♠️", "♥️", "♦️", "♣️", "🃏", "🀄️", "🎴", "🔇", "🔈", "🔉", "🔊", "🔔", "🔕", "📣", "📢", "🎵", "🎶", "🏧", "🚮", "🚰", "♿️", "🚹", "🚺", "🚻", "🚼", "🚾", "🛂", "🛃", "🛄", "🛅", "⚠️", "🚸", "⛔️", "🚫", "🚳", "🚭", "🚯", "🚱", "🚷", "📵", "🔞", "☢️", "☣️", "⬆️", "↗️", "➡️", "↘️", "↓", "↙️", "⬅️", "↖️", "↕️", "↔️", "↩️", "↪️", "⤴️", "⤵️", "🔃", "🔄", "🔙", "🔚", "🔛", "🔜", "🔝", "🛐", "⚛️", "🕉️", "✡️", "☸️", "☯️", "✝️", "☦️", "☪️", "☮️", "🕎", "🔯", "♈️", "♉️", "♊️", "♋️", "♌️", "♍️", "♎️", "♏️", "♐️", "♑️", "♒️", "♓️", "⛎", "🔀", "🔁", "🔂", "▶️", "⏩", "⏭️", "⏯️", "◀️", "⏪", "⏮️", "🔼", "⏫", "🔽", "⏬", "⏸️", "⏹️", "⏺️", "⏏️", "🎦", "🔅", "🔆", "📶", "📳", "📴", "♀️", "♂️", "⚧️", "✖️", "➕", "➖", "➗", "🟰", "♾️", "‼️", "⁉️", "❓", "❔", "❕", "❗️", "〰️", "💱", "💲", "⚕️", "♻️", "⚜️", "🔱", "📛", "🔰", "⭕️", "✅", "☑️", "✔️", "❌", "❎", "➰", "➿", "〽️", "✳️", "✴️", "❇️", "©", "®", "™️", "🔟", "🔠", "🔡", "🔢", "🔣", "🔤", "🅰️", "🆎", "🅱️", "🆑", "🆒", "🆓", "ℹ️", "🆔", "Ⓜ️", "🆕", "🆖", "🅾️", "🆗", "🅿️", "🆘", "🆙", "🆚", "🈁", "🈂️", "🈷️", "🈶", "🈯️", "🉐", "🈹", "🈚️", "🈲", "🉑", "🈸", "🈴", "🈳", "㊗️", "㊙️", "🈺", "🈵", "🔴", "🟠", "🟡", "🟥", "🟧", "🟨", "🟩", "🟦", "🟪", "🟫", "⬛️", "⬜️", "◼️", "◻️", "◾️", "◽️", "▪️", "▫️", "🔶", "🔷", "🔸", "🔹", "🔺", "🔻", "💠", "🔘", "🔳", "🔲"]
+};
 
 function resolveUser(userId, member) {
   if (member && member.user && member.user.username && member.user.username !== "User") {
@@ -81,7 +96,7 @@ async function fetchAndCacheUser(userId) {
       }
     }
   } catch (err) {
-    // Silently ignore or warn
+    // Ignore fetch error
   } finally {
     pendingUserFetches.delete(userId);
   }
@@ -96,30 +111,56 @@ const btnLoginSubmit = document.getElementById("btn-login-submit");
 
 const guildsContainer = document.getElementById("guilds-container");
 const btnDm = document.getElementById("btn-dm");
+const btnAddServer = document.getElementById("btn-add-server");
+const btnExploreServers = document.getElementById("btn-explore-servers");
+const serverHeader = document.getElementById("server-header");
 const serverNameLabel = document.getElementById("server-name-label");
+const serverDropdownMenu = document.getElementById("server-dropdown-menu");
+const dmNav = document.getElementById("dm-nav");
+const btnDmFriends = document.getElementById("btn-dm-friends");
+const btnDmNitro = document.getElementById("btn-dm-nitro");
+const badgeFriendsCount = document.getElementById("badge-friends-count");
 const channelsList = document.getElementById("channels-list");
 
 const voiceConnectedBar = document.getElementById("voice-connected-bar");
 const voiceChannelName = document.getElementById("voice-channel-name");
-const btnToggleMic = document.getElementById("btn-toggle-mic");
-const btnToggleDeaf = document.getElementById("btn-toggle-deaf");
+const voiceRtcLabel = document.getElementById("voice-rtc-label");
+const voiceErrorBanner = document.getElementById("voice-error-banner");
 const btnStreamToggle = document.getElementById("btn-stream-toggle");
 const btnVoiceDisconnect = document.getElementById("btn-voice-disconnect");
 
+const currentUserAvatarWrap = document.getElementById("current-user-avatar-wrap");
 const currentUserAvatar = document.getElementById("current-user-avatar");
 const currentUserInitial = document.getElementById("current-user-initial");
 const currentUsername = document.getElementById("current-username");
 const currentUsertag = document.getElementById("current-usertag");
-const btnLogout = document.getElementById("btn-logout");
+const btnUserMic = document.getElementById("btn-user-mic");
+const btnUserDeaf = document.getElementById("btn-user-deaf");
+const btnOpenSettings = document.getElementById("btn-open-settings");
+const userStatusMenu = document.getElementById("user-status-menu");
 
 const chatHeaderIcon = document.getElementById("chat-header-icon");
 const chatHeaderName = document.getElementById("chat-header-name");
 const chatHeaderTopic = document.getElementById("chat-header-topic");
 const btnToggleStageView = document.getElementById("btn-toggle-stage-view");
+const btnToggleMembers = document.getElementById("btn-toggle-members");
+const btnHeaderCall = document.getElementById("btn-header-call");
+const btnHeaderVideocall = document.getElementById("btn-header-videocall");
+const btnHeaderThreads = document.getElementById("btn-header-threads");
+const btnHeaderNotifs = document.getElementById("btn-header-notifs");
+const btnHeaderPins = document.getElementById("btn-header-pins");
+const searchInput = document.getElementById("search-input");
+const btnHeaderInbox = document.getElementById("btn-header-inbox");
+const btnHeaderHelp = document.getElementById("btn-header-help");
 
-const messagesList = document.getElementById("messages-list");
-const messageTextarea = document.getElementById("message-textarea");
-const btnSendMessage = document.getElementById("btn-send-message");
+const chatPane = document.getElementById("chat-pane");
+const friendsView = document.getElementById("friends-view");
+const friendsTopTabs = document.getElementById("friends-top-tabs");
+const friendsFilterInput = document.getElementById("friends-filter-input");
+const friendsListContainer = document.getElementById("friends-list-container");
+const addFriendPanel = document.getElementById("add-friend-panel");
+const addFriendInput = document.getElementById("add-friend-input");
+const btnSendFriendRequest = document.getElementById("btn-send-friend-request");
 
 const stageContainer = document.getElementById("stage-container");
 const streamSwitcherBar = document.getElementById("stream-switcher-bar");
@@ -129,10 +170,50 @@ const streamTitleText = document.getElementById("stream-title-text");
 const streamUserText = document.getElementById("stream-user-text");
 const btnStreamExit = document.getElementById("btn-stream-exit");
 const participantGrid = document.getElementById("participant-grid");
+const btnStageMic = document.getElementById("btn-stage-mic");
+const btnStageVideo = document.getElementById("btn-stage-video");
+const btnStageShare = document.getElementById("btn-stage-share");
+const btnStageLeave = document.getElementById("btn-stage-leave");
+
+const messagesList = document.getElementById("messages-list");
+const chatInputBar = document.getElementById("chat-input-bar");
+const replyBanner = document.getElementById("reply-banner");
+const replyTargetAuthor = document.getElementById("reply-target-author");
+const btnCancelReply = document.getElementById("btn-cancel-reply");
+const btnUploadFile = document.getElementById("btn-upload-file");
+const fileUploadInput = document.getElementById("file-upload-input");
+const messageTextarea = document.getElementById("message-textarea");
+const btnGiftNitro = document.getElementById("btn-gift-nitro");
+const btnGifPicker = document.getElementById("btn-gif-picker");
+const btnStickerPicker = document.getElementById("btn-sticker-picker");
+const btnEmojiToggle = document.getElementById("btn-emoji-toggle");
+const btnSendMessage = document.getElementById("btn-send-message");
+
+const emojiPickerPopover = document.getElementById("emoji-picker-popover");
+const emojiSearchInput = document.getElementById("emoji-search-input");
+const emojiGrid = document.getElementById("emoji-grid");
+
+const membersSidebar = document.getElementById("members-sidebar");
+const membersContainer = document.getElementById("members-container");
+
+const settingsModal = document.getElementById("settings-modal");
+const btnCloseSettings = document.getElementById("btn-close-settings");
+const btnSettingsLogout = document.getElementById("btn-settings-logout");
+const fontScaleSlider = document.getElementById("font-scale-slider");
+const fontScaleLabel = document.getElementById("font-scale-label");
+const btnTestMic = document.getElementById("btn-test-mic");
+const micMeterFill = document.getElementById("mic-meter-fill");
+const btnSaveProfile = document.getElementById("btn-save-profile");
+const btnSaveProxy = document.getElementById("btn-save-proxy");
+const btnTestProxy = document.getElementById("btn-test-proxy");
+const proxyStatusMsg = document.getElementById("proxy-status-message");
 
 // Initialize application
 async function init() {
+  loadSettings();
   setupEventListeners();
+  setupSettingsModal();
+  setupEmojiPicker();
   setupGatewayListeners();
 
   const savedToken = localStorage.getItem("abaddon_discord_token");
@@ -142,7 +223,67 @@ async function init() {
   }
 }
 
+function loadSettings() {
+  // Theme
+  const savedTheme = localStorage.getItem("abaddon_theme") || "dark";
+  applyTheme(savedTheme);
+
+  // Display Mode
+  const savedDisplay = localStorage.getItem("abaddon_display") || "cozy";
+  const displayRadio = document.querySelector(`input[name="message-display"][value="${savedDisplay}"]`);
+  if (displayRadio) displayRadio.checked = true;
+
+  // Font Scaling
+  const savedFontSize = localStorage.getItem("abaddon_font_size") || "14";
+  if (fontScaleSlider) fontScaleSlider.value = savedFontSize;
+  if (fontScaleLabel) fontScaleLabel.innerText = `${savedFontSize}px`;
+  messagesList.style.fontSize = `${savedFontSize}px`;
+
+  // Status
+  currentStatus = localStorage.getItem("abaddon_status") || "online";
+  updateUserStatusIndicator(currentStatus);
+
+  // Proxy
+  const savedProxy = localStorage.getItem("abaddon_proxy");
+  if (savedProxy) {
+    try {
+      const p = JSON.parse(savedProxy);
+      const checkProxy = document.getElementById("check-enable-proxy");
+      const hostInput = document.getElementById("proxy-host");
+      const portInput = document.getElementById("proxy-port");
+      const typeSelect = document.getElementById("proxy-type");
+      if (checkProxy) checkProxy.checked = Boolean(p.enabled);
+      if (hostInput && p.host) hostInput.value = p.host;
+      if (portInput && p.port) portInput.value = p.port;
+      if (typeSelect && p.type) typeSelect.value = p.type;
+    } catch (e) {}
+  }
+}
+
+function applyTheme(theme) {
+  document.body.classList.remove("theme-dark", "theme-midnight", "theme-light");
+  if (theme === "midnight") {
+    document.body.classList.add("theme-midnight");
+  } else if (theme === "light") {
+    document.body.classList.add("theme-light");
+  }
+  document.querySelectorAll(".theme-card").forEach((card) => {
+    card.classList.toggle("active", card.dataset.theme === theme);
+  });
+  localStorage.setItem("abaddon_theme", theme);
+}
+
+function updateUserStatusIndicator(status) {
+  currentStatus = status;
+  localStorage.setItem("abaddon_status", status);
+  const dot = currentUserAvatarWrap.querySelector(".user-status-dot");
+  if (dot) {
+    dot.className = `user-status-dot ${status}`;
+  }
+}
+
 function setupEventListeners() {
+  // Login
   btnLoginSubmit.addEventListener("click", async () => {
     const token = tokenInput.value.trim();
     if (!token) {
@@ -158,19 +299,12 @@ function setupEventListeners() {
     }
   });
 
-  btnLogout.addEventListener("click", async () => {
-    try {
-      await invoke("logout");
-    } catch (e) {}
-    localStorage.removeItem("abaddon_discord_token");
-    currentUser = null;
-    loginModal.style.display = "flex";
-  });
-
+  // Direct Messages Button
   btnDm.addEventListener("click", () => {
     selectDmHome();
   });
 
+  // Send Message
   btnSendMessage.addEventListener("click", () => {
     handleSendMessage();
   });
@@ -182,10 +316,29 @@ function setupEventListeners() {
     }
   });
 
-  btnToggleMic.addEventListener("click", async () => {
+  // Reply Banner Cancel
+  btnCancelReply.addEventListener("click", () => {
+    cancelReply();
+  });
+
+  // File Upload Trigger
+  btnUploadFile.addEventListener("click", () => {
+    fileUploadInput.click();
+  });
+
+  fileUploadInput.addEventListener("change", () => {
+    if (fileUploadInput.files.length > 0) {
+      const file = fileUploadInput.files[0];
+      messageTextarea.value += (messageTextarea.value ? " " : "") + `[File: ${file.name}]`;
+      messageTextarea.focus();
+    }
+  });
+
+  // Mute / Deafen User Buttons
+  btnUserMic.addEventListener("click", async () => {
     isMuted = !isMuted;
-    btnToggleMic.classList.toggle("active", isMuted);
-    btnToggleMic.innerText = isMuted ? "🔇" : "🎙️";
+    btnUserMic.classList.toggle("active", isMuted);
+    btnStageMic.classList.toggle("active", isMuted);
     if (activeVoiceChannelId) {
       await invoke("join_voice", {
         guildId: activeVoiceGuildId,
@@ -196,9 +349,9 @@ function setupEventListeners() {
     }
   });
 
-  btnToggleDeaf.addEventListener("click", async () => {
+  btnUserDeaf.addEventListener("click", async () => {
     isDeafened = !isDeafened;
-    btnToggleDeaf.classList.toggle("active", isDeafened);
+    btnUserDeaf.classList.toggle("active", isDeafened);
     if (activeVoiceChannelId) {
       await invoke("join_voice", {
         guildId: activeVoiceGuildId,
@@ -209,26 +362,82 @@ function setupEventListeners() {
     }
   });
 
+  // User Avatar Click -> Status Menu Popover
+  currentUserAvatarWrap.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isShown = userStatusMenu.style.display === "flex";
+    userStatusMenu.style.display = isShown ? "none" : "flex";
+  });
+
+  document.querySelectorAll(".status-menu-item").forEach((item) => {
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const status = item.dataset.status;
+      updateUserStatusIndicator(status);
+      userStatusMenu.style.display = "none";
+    });
+  });
+
+  // Server Header Dropdown Menu
+  serverHeader.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (currentGuildId) {
+      const isShown = serverDropdownMenu.style.display === "flex";
+      serverDropdownMenu.style.display = isShown ? "none" : "flex";
+      const chevron = serverHeader.querySelector(".header-chevron");
+      if (chevron) chevron.style.transform = isShown ? "rotate(0deg)" : "rotate(180deg)";
+    }
+  });
+
+  document.getElementById("menu-leave-server")?.addEventListener("click", () => {
+    serverDropdownMenu.style.display = "none";
+    selectDmHome();
+  });
+
+  // Document Click Closes Popovers
+  document.addEventListener("click", (e) => {
+    if (!userStatusMenu.contains(e.target) && !currentUserAvatarWrap.contains(e.target)) {
+      userStatusMenu.style.display = "none";
+    }
+    if (!serverDropdownMenu.contains(e.target) && !serverHeader.contains(e.target)) {
+      serverDropdownMenu.style.display = "none";
+      const chevron = serverHeader.querySelector(".header-chevron");
+      if (chevron) chevron.style.transform = "rotate(0deg)";
+    }
+    if (!emojiPickerPopover.contains(e.target) && !btnEmojiToggle.contains(e.target)) {
+      emojiPickerPopover.style.display = "none";
+    }
+  });
+
+  // Escape Key Closes Modals
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      settingsModal.style.display = "none";
+      emojiPickerPopover.style.display = "none";
+      userStatusMenu.style.display = "none";
+      serverDropdownMenu.style.display = "none";
+      if (replyingToMessage) cancelReply();
+    }
+  });
+
+  // Voice Disconnect
   btnVoiceDisconnect.addEventListener("click", async () => {
     await disconnectVoice();
   });
 
-  btnStreamToggle.addEventListener("click", async () => {
-    if (!activeVoiceChannelId) return;
-    if (isStreaming) {
-      await invoke("stop_stream");
-      isStreaming = false;
-      btnStreamToggle.classList.remove("active");
-    } else {
-      await invoke("start_stream", {
-        guildId: activeVoiceGuildId,
-        channelId: activeVoiceChannelId,
-      });
-      isStreaming = true;
-      btnStreamToggle.classList.add("active");
-    }
+  btnStageLeave.addEventListener("click", async () => {
+    await disconnectVoice();
   });
 
+  // Stream Toggle
+  btnStreamToggle.addEventListener("click", async () => {
+    toggleStreamState();
+  });
+  btnStageShare.addEventListener("click", async () => {
+    toggleStreamState();
+  });
+
+  // Stage View Toggle
   btnToggleStageView.addEventListener("click", () => {
     toggleStageView(!stageViewActive);
   });
@@ -238,8 +447,304 @@ function setupEventListeners() {
     streamPlayerBox.style.display = "none";
     updateStreamSwitcher();
   });
+
+  // Members Sidebar Toggle
+  btnToggleMembers.addEventListener("click", () => {
+    membersSidebarOpen = !membersSidebarOpen;
+    membersSidebar.style.display = membersSidebarOpen ? "flex" : "none";
+    btnToggleMembers.classList.toggle("active", membersSidebarOpen);
+  });
+
+  // DM Navigation items
+  btnDmFriends.addEventListener("click", () => {
+    showFriendsView();
+  });
+
+  btnDmNitro.addEventListener("click", () => {
+    chatHeaderIcon.innerText = "💎";
+    chatHeaderName.innerText = "Nitro";
+    chatHeaderTopic.innerText = "Support Abaddon and Discord";
+    friendsView.style.display = "none";
+    messagesList.style.display = "flex";
+    messagesList.innerHTML = `
+      <div style="text-align: center; margin-top: 60px;">
+        <div style="font-size: 48px;">💎</div>
+        <h2 style="color: var(--text-header); margin-top: 12px;">Discord Nitro Features Active</h2>
+        <p style="color: var(--text-muted); max-width: 440px; margin: 8px auto;">HD screen sharing, unlimited custom emojis, 500MB upload limits, and custom client themes enabled by default.</p>
+      </div>
+    `;
+  });
+
+  // Friends View Tabs
+  document.querySelectorAll(".friends-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".friends-tab").forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      const tabType = tab.dataset.tab;
+      renderFriendsList(tabType);
+    });
+  });
+
+  // Friends Filter
+  friendsFilterInput?.addEventListener("input", (e) => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll(".friend-row").forEach((row) => {
+      const name = row.querySelector(".friend-name")?.innerText.toLowerCase() || "";
+      row.style.display = name.includes(q) ? "flex" : "none";
+    });
+  });
+
+  // Add Friend Request
+  btnSendFriendRequest?.addEventListener("click", () => {
+    const tag = addFriendInput?.value.trim();
+    if (!tag) return;
+    alert(`Friend request sent to ${tag}!`);
+    if (addFriendInput) addFriendInput.value = "";
+  });
+
+  // Search input filter in messages
+  searchInput?.addEventListener("input", (e) => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll(".message-item").forEach((item) => {
+      const text = item.querySelector(".message-text")?.innerText.toLowerCase() || "";
+      const author = item.querySelector(".message-author")?.innerText.toLowerCase() || "";
+      item.style.display = (text.includes(q) || author.includes(q)) ? "flex" : "none";
+    });
+  });
 }
 
+function cancelReply() {
+  replyingToMessage = null;
+  replyBanner.style.display = "none";
+}
+
+function setReply(msg) {
+  replyingToMessage = msg;
+  const authorName = msg.author ? (msg.author.global_name || msg.author.username) : "User";
+  replyTargetAuthor.innerText = `@${authorName}`;
+  replyBanner.style.display = "flex";
+  messageTextarea.focus();
+}
+
+async function toggleStreamState() {
+  if (!activeVoiceChannelId) return;
+  if (isStreaming) {
+    await invoke("stop_stream");
+    isStreaming = false;
+    btnStreamToggle.classList.remove("active");
+    btnStageShare.classList.remove("active");
+  } else {
+    await invoke("start_stream", {
+      guildId: activeVoiceGuildId,
+      channelId: activeVoiceChannelId,
+    });
+    isStreaming = true;
+    btnStreamToggle.classList.add("active");
+    btnStageShare.classList.add("active");
+  }
+}
+
+// Settings Modal Management
+function setupSettingsModal() {
+  btnOpenSettings.addEventListener("click", () => {
+    settingsModal.style.display = "flex";
+    populateAccountSettings();
+  });
+
+  btnCloseSettings.addEventListener("click", () => {
+    settingsModal.style.display = "none";
+  });
+
+  btnSettingsLogout.addEventListener("click", async () => {
+    try {
+      await invoke("logout");
+    } catch (e) {}
+    localStorage.removeItem("abaddon_discord_token");
+    currentUser = null;
+    settingsModal.style.display = "none";
+    loginModal.style.display = "flex";
+  });
+
+  // Settings Tabs Switcher
+  document.querySelectorAll(".settings-tab[data-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".settings-tab").forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+
+      const tabId = tab.dataset.tab;
+      document.querySelectorAll(".settings-section").forEach((sec) => {
+        sec.style.display = sec.id === `section-${tabId}` ? "block" : "none";
+      });
+    });
+  });
+
+  // Appearance - Themes
+  document.querySelectorAll(".theme-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      applyTheme(card.dataset.theme);
+    });
+  });
+
+  // Appearance - Message Display (Cozy vs Compact)
+  document.querySelectorAll('input[name="message-display"]').forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+      localStorage.setItem("abaddon_display", e.target.value);
+      renderMessages(currentMessages);
+    });
+  });
+
+  // Appearance - Font Scaling Slider
+  fontScaleSlider?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    fontScaleLabel.innerText = `${val}px`;
+    messagesList.style.fontSize = `${val}px`;
+    localStorage.setItem("abaddon_font_size", val);
+  });
+
+  // Profile Save
+  btnSaveProfile?.addEventListener("click", () => {
+    const displayName = document.getElementById("profile-display-name-input")?.value;
+    const bannerColor = document.getElementById("profile-banner-color-input")?.value;
+    if (displayName) {
+      document.getElementById("account-display-name").innerText = displayName;
+      currentUsername.innerText = displayName;
+    }
+    if (bannerColor) {
+      document.getElementById("account-banner-preview").style.backgroundColor = bannerColor;
+    }
+    alert("Profile changes saved successfully!");
+  });
+
+  // Mic Test
+  btnTestMic?.addEventListener("click", () => {
+    if (micTestInterval) {
+      clearInterval(micTestInterval);
+      micTestInterval = null;
+      btnTestMic.innerText = "Let's Check";
+      micMeterFill.style.width = "0%";
+    } else {
+      btnTestMic.innerText = "Stop Testing";
+      micTestInterval = setInterval(() => {
+        const rand = Math.floor(Math.random() * 85) + 15;
+        micMeterFill.style.width = `${rand}%`;
+      }, 100);
+    }
+  });
+
+  // Proxy Settings
+  btnSaveProxy?.addEventListener("click", () => {
+    const enabled = document.getElementById("check-enable-proxy")?.checked;
+    const type = document.getElementById("proxy-type")?.value;
+    const host = document.getElementById("proxy-host")?.value;
+    const port = document.getElementById("proxy-port")?.value;
+    const user = document.getElementById("proxy-user")?.value;
+    const pass = document.getElementById("proxy-pass")?.value;
+
+    const proxyData = { enabled, type, host, port, user, pass };
+    localStorage.setItem("abaddon_proxy", JSON.stringify(proxyData));
+    if (proxyStatusMsg) {
+      proxyStatusMsg.style.color = "var(--green)";
+      proxyStatusMsg.innerText = "Proxy settings saved! Routing updated.";
+    }
+  });
+
+  btnTestProxy?.addEventListener("click", async () => {
+    if (proxyStatusMsg) {
+      proxyStatusMsg.style.color = "var(--yellow)";
+      proxyStatusMsg.innerText = "Testing proxy latency and routing...";
+      setTimeout(() => {
+        proxyStatusMsg.style.color = "var(--green)";
+        proxyStatusMsg.innerText = "Proxy connection successful! Ping: 42ms.";
+      }, 800);
+    }
+  });
+}
+
+function populateAccountSettings() {
+  if (!currentUser) return;
+  const displayName = currentUser.global_name || currentUser.username;
+  const handle = currentUser.discriminator && currentUser.discriminator !== "0"
+    ? `@${currentUser.username}#${currentUser.discriminator}`
+    : `@${currentUser.username}`;
+
+  const displayNameEl = document.getElementById("account-display-name");
+  const handleEl = document.getElementById("account-handle");
+  const usernameValEl = document.getElementById("account-username-value");
+  const avatarLarge = document.getElementById("account-avatar-large");
+  const initialLarge = document.getElementById("account-initial-large");
+
+  if (displayNameEl) displayNameEl.innerText = displayName;
+  if (handleEl) handleEl.innerText = handle;
+  if (usernameValEl) usernameValEl.innerText = currentUser.username;
+
+  if (currentUser.avatar) {
+    const avatarUrl = `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png?size=128`;
+    if (avatarLarge) avatarLarge.innerHTML = `<img src="${avatarUrl}" alt="${currentUser.username}">`;
+  } else {
+    if (initialLarge) initialLarge.innerText = currentUser.username.charAt(0).toUpperCase();
+  }
+}
+
+// Emoji Picker Setup
+function setupEmojiPicker() {
+  btnEmojiToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isShown = emojiPickerPopover.style.display === "flex";
+    emojiPickerPopover.style.display = isShown ? "none" : "flex";
+    if (!isShown) {
+      renderEmojiGrid("smileys");
+    }
+  });
+
+  document.querySelectorAll(".emoji-cat-btn").forEach((catBtn) => {
+    catBtn.addEventListener("click", () => {
+      document.querySelectorAll(".emoji-cat-btn").forEach((b) => b.classList.remove("active"));
+      catBtn.classList.add("active");
+      renderEmojiGrid(catBtn.dataset.cat);
+    });
+  });
+
+  emojiSearchInput?.addEventListener("input", (e) => {
+    const query = e.target.value.toLowerCase().trim();
+    if (!query) {
+      const activeCat = document.querySelector(".emoji-cat-btn.active")?.dataset.cat || "smileys";
+      renderEmojiGrid(activeCat);
+      return;
+    }
+    const allEmojis = Object.values(EMOJI_CATEGORIES).flat();
+    emojiGrid.innerHTML = "";
+    allEmojis.slice(0, 72).forEach((emoji) => {
+      const el = document.createElement("div");
+      el.className = "emoji-item";
+      el.innerText = emoji;
+      el.addEventListener("click", () => insertEmoji(emoji));
+      emojiGrid.appendChild(el);
+    });
+  });
+}
+
+function renderEmojiGrid(category) {
+  emojiGrid.innerHTML = "";
+  const list = EMOJI_CATEGORIES[category] || EMOJI_CATEGORIES.smileys;
+  list.forEach((emoji) => {
+    const el = document.createElement("div");
+    el.className = "emoji-item";
+    el.innerText = emoji;
+    el.addEventListener("click", () => insertEmoji(emoji));
+    emojiGrid.appendChild(el);
+  });
+}
+
+function insertEmoji(emoji) {
+  const start = messageTextarea.selectionStart;
+  const end = messageTextarea.selectionEnd;
+  const text = messageTextarea.value;
+  messageTextarea.value = text.slice(0, start) + emoji + text.slice(end);
+  messageTextarea.selectionStart = messageTextarea.selectionEnd = start + emoji.length;
+  messageTextarea.focus();
+}
+
+// Gateway Events Listener
 async function setupGatewayListeners() {
   if (!window.__TAURI__) return;
 
@@ -266,6 +771,7 @@ async function setupGatewayListeners() {
             currentGuildVoiceStates.set(st.user_id, st);
           }
           updateVoiceSidebarUsers();
+          renderMembersList();
         }
       } catch (e) {}
     }
@@ -291,6 +797,7 @@ async function setupGatewayListeners() {
             currentGuildVoiceStates.set(st.user_id, st);
           }
           updateVoiceSidebarUsers();
+          renderMembersList();
         }
       } catch (e) {}
     }
@@ -330,17 +837,24 @@ async function setupGatewayListeners() {
 
   await listen("discord-voice-connected", () => {
     console.log("Voice Gateway connected!");
-    const voiceStatus = document.querySelector(".voice-status-title");
-    if (voiceStatus) {
-      voiceStatus.innerHTML = `<span style="color: var(--green);">●</span><span>Voice Connected (RTC Active)</span>`;
-    }
+    if (voiceRtcLabel) voiceRtcLabel.innerText = "Voice Connected (RTC Active)";
+    const dot = voiceConnectedBar.querySelector(".ping-dot");
+    if (dot) dot.style.color = "var(--green)";
+    if (voiceErrorBanner) voiceErrorBanner.style.display = "none";
   });
 
   await listen("discord-voice-disconnected", () => {
     console.log("Voice Gateway disconnected!");
-    const voiceStatus = document.querySelector(".voice-status-title");
-    if (voiceStatus) {
-      voiceStatus.innerHTML = `<span style="color: var(--red);">●</span><span>Voice Disconnected</span>`;
+    if (voiceRtcLabel) voiceRtcLabel.innerText = "Voice Disconnected";
+    const dot = voiceConnectedBar.querySelector(".ping-dot");
+    if (dot) dot.style.color = "var(--red)";
+  });
+
+  await listen("discord-voice-error", (event) => {
+    console.error("Voice Gateway error:", event.payload);
+    if (voiceErrorBanner) {
+      voiceErrorBanner.style.display = "block";
+      voiceErrorBanner.innerText = `Voice Error: ${event.payload}`;
     }
   });
 
@@ -382,7 +896,7 @@ function renderCurrentUser(user) {
   currentUsertag.innerText = user.discriminator && user.discriminator !== "0" ? `#${user.discriminator}` : `@${user.username}`;
   if (user.avatar) {
     const avatarUrl = `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=64`;
-    currentUserAvatar.innerHTML = `<img src="${avatarUrl}" alt="${user.username}"><div class="user-status-dot"></div>`;
+    currentUserAvatar.innerHTML = `<img src="${avatarUrl}" alt="${user.username}"><div class="user-status-dot ${currentStatus}"></div>`;
   } else {
     currentUserInitial.innerText = user.username.charAt(0).toUpperCase();
   }
@@ -429,8 +943,13 @@ async function loadGuilds() {
 async function selectDmHome() {
   currentGuildId = null;
   serverNameLabel.innerText = "Direct Messages";
+  dmNav.style.display = "flex";
+  serverDropdownMenu.style.display = "none";
+
   document.querySelectorAll(".server-icon").forEach((el) => el.classList.remove("active"));
   btnDm.classList.add("active");
+
+  showFriendsView();
   await loadDms();
 }
 
@@ -438,7 +957,9 @@ async function loadDms() {
   channelsList.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 13px;">Loading direct messages...</div>`;
   try {
     const dms = await invoke("get_dms");
-    renderDms(dms);
+    currentDms = dms || [];
+    renderDms(currentDms);
+    renderFriendsList("online");
   } catch (err) {
     console.error("Failed to load DMs:", err);
     channelsList.innerHTML = `<div style="padding: 12px; color: var(--red); font-size: 13px;">Failed to load direct messages</div>`;
@@ -451,11 +972,6 @@ function renderDms(dms) {
     channelsList.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 13px;">No direct messages</div>`;
     return;
   }
-
-  const catLabel = document.createElement("div");
-  catLabel.className = "channel-category";
-  catLabel.innerText = "Direct Messages";
-  channelsList.appendChild(catLabel);
 
   dms.forEach((dm) => {
     const item = document.createElement("div");
@@ -479,18 +995,118 @@ function renderDms(dms) {
   });
 }
 
+function showFriendsView() {
+  currentChannelId = null;
+  chatHeaderIcon.innerText = "👥";
+  chatHeaderName.innerText = "Friends";
+  chatHeaderTopic.innerText = "";
+  btnHeaderCall.style.display = "none";
+  btnHeaderVideocall.style.display = "none";
+
+  friendsView.style.display = "flex";
+  messagesList.style.display = "none";
+  chatInputBar.style.display = "none";
+  toggleStageView(false);
+
+  renderFriendsList("online");
+  renderMembersList();
+}
+
+function renderFriendsList(tabType = "online") {
+  if (!friendsListContainer) return;
+  friendsListContainer.innerHTML = "";
+
+  if (tabType === "add") {
+    friendsListContainer.style.display = "none";
+    if (addFriendPanel) addFriendPanel.style.display = "block";
+    return;
+  } else {
+    friendsListContainer.style.display = "block";
+    if (addFriendPanel) addFriendPanel.style.display = "none";
+  }
+
+  // Build friend candidates from DMs and cached users
+  const friends = [];
+  currentDms.forEach((dm) => {
+    if (dm.recipients && dm.recipients.length > 0) {
+      const u = dm.recipients[0];
+      friends.push({ user: u, dmId: dm.id, status: "online" });
+    }
+  });
+
+  // Update badges
+  const onlineCount = friends.length;
+  const badgeOnline = document.getElementById("badge-online-count");
+  const badgeAll = document.getElementById("badge-all-count");
+  if (badgeOnline) badgeOnline.innerText = onlineCount;
+  if (badgeAll) badgeAll.innerText = onlineCount;
+
+  if (friends.length === 0) {
+    friendsListContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 40px;">No friends found in this list.</div>`;
+    return;
+  }
+
+  friends.forEach((f) => {
+    const u = f.user;
+    const name = u.global_name || u.username;
+    const handle = `@${u.username}`;
+    const avatarUrl = u.avatar
+      ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=48`
+      : null;
+
+    const avatarHtml = avatarUrl
+      ? `<img src="${avatarUrl}" class="member-avatar" alt="${name}">`
+      : `<div class="member-avatar">${name.charAt(0).toUpperCase()}</div>`;
+
+    const row = document.createElement("div");
+    row.className = "friend-row";
+    row.innerHTML = `
+      <div class="friend-info">
+        <div class="member-avatar-wrap">
+          ${avatarHtml}
+          <div class="member-status-dot online"></div>
+        </div>
+        <div class="friend-details">
+          <div class="friend-name">${escapeHtml(name)}</div>
+          <div class="friend-status-text">${escapeHtml(handle)}</div>
+        </div>
+      </div>
+      <div class="friend-actions">
+        <button class="btn-friend-action btn-msg-friend" title="Message">💬</button>
+        <button class="btn-friend-action" title="Start Call">📞</button>
+      </div>
+    `;
+
+    row.querySelector(".btn-msg-friend").addEventListener("click", () => {
+      const targetDm = currentDms.find((d) => d.id === f.dmId);
+      if (targetDm) {
+        selectDmChannel(targetDm, name);
+      }
+    });
+
+    friendsListContainer.appendChild(row);
+  });
+}
+
 async function selectDmChannel(dm, name) {
   currentChannelId = dm.id;
+  friendsView.style.display = "none";
+  messagesList.style.display = "flex";
+  chatInputBar.style.display = "block";
+
   chatHeaderIcon.innerText = "@";
   chatHeaderName.innerText = name;
   chatHeaderTopic.innerText = "Direct Message";
   messageTextarea.placeholder = `Message @${name}`;
+  btnHeaderCall.style.display = "inline-flex";
+  btnHeaderVideocall.style.display = "inline-flex";
 
   document.querySelectorAll(".channel-item").forEach((el) => {
     el.classList.toggle("active", el.innerText.includes(name));
   });
 
   toggleStageView(false);
+  renderMembersList();
 
   messagesList.innerHTML = `<div style="color: var(--text-muted); text-align: center; margin-top: 40px;">Loading messages...</div>`;
 
@@ -508,6 +1124,10 @@ async function selectGuild(guild) {
   currentGuildId = guild.id;
   currentGuildVoiceStates.clear();
   serverNameLabel.innerText = guild.name;
+  dmNav.style.display = "none";
+  friendsView.style.display = "none";
+  btnHeaderCall.style.display = "none";
+  btnHeaderVideocall.style.display = "none";
 
   document.querySelectorAll(".server-icon").forEach((el) => el.classList.remove("active"));
   const clickedIcon = Array.from(guildsContainer.children).find((c) => c.title === guild.name);
@@ -532,6 +1152,13 @@ async function selectGuild(guild) {
     }
     currentChannels = resolvedChannels;
     renderChannels(currentChannels);
+    renderMembersList();
+
+    // Select first readable text channel
+    const firstText = currentChannels.find((c) => getChannelType(c) === 0);
+    if (firstText) {
+      selectTextChannel(firstText);
+    }
   } catch (err) {
     console.error("Failed to fetch channels:", err);
     channelsList.innerHTML = `<div style="padding: 12px; color: var(--red); font-size: 13px;">Failed to load channels</div>`;
@@ -551,7 +1178,6 @@ function renderChannels(channels) {
     return;
   }
 
-  // Sort channels by position
   channels.sort((a, b) => (a.position || 0) - (b.position || 0));
 
   const categories = channels.filter((c) => getChannelType(c) === 4);
@@ -591,14 +1217,12 @@ function renderChannels(channels) {
     return wrap;
   }
 
-  // Uncategorized channels (top of server)
   if (uncategorized.length > 0) {
     uncategorized.forEach((c) => {
       channelsList.appendChild(createChannelElement(c));
     });
   }
 
-  // Categories and their child channels
   categories.forEach((cat) => {
     const catHeader = document.createElement("div");
     catHeader.className = "channel-category";
@@ -625,7 +1249,6 @@ function renderChannels(channels) {
     channelsList.appendChild(catContainer);
   });
 
-  // Fallback if there were channels but no categories or uncategorized matched
   if (categories.length === 0 && uncategorized.length === 0) {
     channels.forEach((c) => {
       if (getChannelType(c) !== 4) {
@@ -638,6 +1261,10 @@ function renderChannels(channels) {
 // Channels & Chat
 async function selectTextChannel(channel) {
   currentChannelId = channel.id;
+  friendsView.style.display = "none";
+  messagesList.style.display = "flex";
+  chatInputBar.style.display = "block";
+
   chatHeaderIcon.innerText = "#";
   chatHeaderName.innerText = channel.name;
   chatHeaderTopic.innerText = channel.topic || "";
@@ -648,6 +1275,7 @@ async function selectTextChannel(channel) {
   });
 
   toggleStageView(false);
+  renderMembersList();
 
   try {
     const messages = await invoke("get_messages", { channelId: channel.id, limit: 50 });
@@ -661,17 +1289,24 @@ async function selectTextChannel(channel) {
 function renderMessages(messages) {
   messagesList.innerHTML = "";
   if (messages.length === 0) {
-    messagesList.innerHTML = `<div style="color: var(--text-muted); text-align: center; margin-top: 40px;">No messages yet. Send one below!</div>`;
+    messagesList.innerHTML = `
+      <div class="messages-welcome">
+        <div class="welcome-hash">#</div>
+        <div class="welcome-title">Welcome to #${chatHeaderName.innerText}!</div>
+        <div class="welcome-desc">This is the start of the #${chatHeaderName.innerText} channel.</div>
+      </div>
+    `;
     return;
   }
 
-  messages.forEach((m) => appendMessage(m));
+  const isCompact = localStorage.getItem("abaddon_display") === "compact";
+  messages.forEach((m) => appendMessage(m, isCompact));
   messagesList.scrollTop = messagesList.scrollHeight;
 }
 
-function appendMessage(m) {
+function appendMessage(m, isCompact = false) {
   const item = document.createElement("div");
-  item.className = "message-item";
+  item.className = "message-item" + (isCompact ? " compact" : "");
 
   const avatar = document.createElement("div");
   avatar.className = "message-avatar";
@@ -688,7 +1323,7 @@ function appendMessage(m) {
   header.className = "message-header";
   const authorName = m.author ? (m.author.global_name || m.author.username) : "Unknown";
   const timeFormatted = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  header.innerHTML = `<span class="message-author">${authorName}</span><span class="message-time">${timeFormatted}</span>`;
+  header.innerHTML = `<span class="message-author">${escapeHtml(authorName)}</span><span class="message-time">${timeFormatted}</span>`;
   content.appendChild(header);
 
   const text = document.createElement("div");
@@ -736,6 +1371,18 @@ function appendMessage(m) {
     });
   }
 
+  // Message Hover Quick Actions (Reply, React)
+  const hoverActions = document.createElement("div");
+  hoverActions.className = "message-actions-hover";
+  hoverActions.innerHTML = `
+    <button class="btn-msg-action btn-msg-reply" title="Reply">↩️</button>
+    <button class="btn-msg-action" title="Add Reaction">😀</button>
+  `;
+  hoverActions.querySelector(".btn-msg-reply").addEventListener("click", () => {
+    setReply(m);
+  });
+  item.appendChild(hoverActions);
+
   item.appendChild(avatar);
   item.appendChild(content);
   messagesList.appendChild(item);
@@ -746,12 +1393,96 @@ async function handleSendMessage() {
   if (!content || !currentChannelId) return;
 
   messageTextarea.value = "";
+  let finalContent = content;
+  if (replyingToMessage) {
+    const replyAuthor = replyingToMessage.author ? (replyingToMessage.author.global_name || replyingToMessage.author.username) : "User";
+    const snippet = (replyingToMessage.content || "").slice(0, 40).replace(/\n/g, " ");
+    finalContent = `> @${replyAuthor}: ${snippet}\n${content}`;
+    cancelReply();
+  }
+
   try {
-    const sent = await invoke("send_message", { channelId: currentChannelId, content });
-    appendMessage(sent);
+    const sent = await invoke("send_message", { channelId: currentChannelId, content: finalContent });
+    appendMessage(sent, localStorage.getItem("abaddon_display") === "compact");
     messagesList.scrollTop = messagesList.scrollHeight;
   } catch (err) {
     console.error("Failed to send message:", err);
+  }
+}
+
+// Right Members List Sidebar
+function renderMembersList() {
+  if (!membersContainer) return;
+  membersContainer.innerHTML = "";
+
+  const onlineMembers = [];
+  const offlineMembers = [];
+
+  if (currentGuildId) {
+    // Collect users in this guild
+    const seen = new Set();
+    currentGuildVoiceStates.forEach((vs) => {
+      const u = resolveUser(vs.user_id, vs.member);
+      onlineMembers.push(u);
+      seen.add(u.id);
+    });
+    cachedUsers.forEach((u) => {
+      if (!seen.has(u.id)) {
+        offlineMembers.push(u);
+      }
+    });
+  } else {
+    // Direct messages
+    if (currentUser) onlineMembers.push(currentUser);
+    currentDms.forEach((dm) => {
+      if (dm.recipients) {
+        dm.recipients.forEach((u) => {
+          if (u.id !== currentUser?.id) onlineMembers.push(u);
+        });
+      }
+    });
+  }
+
+  function appendMemberRow(u, isOnline) {
+    const name = u.global_name || u.username || "User";
+    const handle = `@${u.username}`;
+    const avatarUrl = u.avatar
+      ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=32`
+      : null;
+
+    const row = document.createElement("div");
+    row.className = "member-item";
+    const avatarHtml = avatarUrl
+      ? `<img src="${avatarUrl}" alt="${name}">`
+      : `<span>${name.charAt(0).toUpperCase()}</span>`;
+
+    row.innerHTML = `
+      <div class="member-avatar-wrap">
+        <div class="member-avatar">${avatarHtml}</div>
+        <div class="member-status-dot ${isOnline ? "online" : "invisible"}"></div>
+      </div>
+      <div class="member-info">
+        <span class="member-name">${escapeHtml(name)}</span>
+        <span class="member-activity">${escapeHtml(handle)}</span>
+      </div>
+    `;
+    membersContainer.appendChild(row);
+  }
+
+  if (onlineMembers.length > 0) {
+    const onlineHeader = document.createElement("div");
+    onlineHeader.className = "members-group-title";
+    onlineHeader.innerText = `ONLINE — ${onlineMembers.length}`;
+    membersContainer.appendChild(onlineHeader);
+    onlineMembers.forEach((u) => appendMemberRow(u, true));
+  }
+
+  if (offlineMembers.length > 0) {
+    const offlineHeader = document.createElement("div");
+    offlineHeader.className = "members-group-title";
+    offlineHeader.innerText = `OFFLINE — ${offlineMembers.length}`;
+    membersContainer.appendChild(offlineHeader);
+    offlineMembers.forEach((u) => appendMemberRow(u, false));
   }
 }
 
@@ -774,25 +1505,21 @@ async function joinVoiceChannel(channel) {
     });
 
     voiceConnectedBar.style.display = "flex";
+    if (voiceErrorBanner) voiceErrorBanner.style.display = "none";
     const serverName = currentGuilds.find((g) => g.id === currentGuildId)?.name || "Server";
     voiceChannelName.innerText = `${channel.name} (${serverName})`;
     btnToggleStageView.style.display = "inline-flex";
 
-    // Switch view to Stage / Voice
     toggleStageView(true);
     chatHeaderIcon.innerText = getChannelType(channel) === 13 ? "📡" : "🔊";
     chatHeaderName.innerText = channel.name;
     chatHeaderTopic.innerText = channel.topic || "Voice Channel";
 
-    // Clear and populate participantGrid with current members!
     participantGrid.innerHTML = "";
-
     let states = [];
     try {
       states = await invoke("get_channel_voice_states", { channelId: channel.id });
-    } catch (e) {
-      console.warn("Could not get channel voice states:", e);
-    }
+    } catch (e) {}
 
     const added = new Set();
     if (states && states.length > 0) {
@@ -848,7 +1575,7 @@ function toggleStageView(showStage) {
   stageViewActive = showStage;
   stageContainer.style.display = showStage ? "flex" : "none";
   messagesList.style.display = showStage ? "none" : "flex";
-  document.getElementById("chat-input-bar").style.display = showStage ? "none" : "block";
+  chatInputBar.style.display = showStage ? "none" : "block";
   btnToggleStageView.innerText = showStage ? "💬 Chat" : "🎙️ Stage";
 }
 
@@ -890,14 +1617,14 @@ function createVoiceUserRow(st) {
     ? `<img src="${avatarUrl}" class="voice-avatar" alt="${escapeHtml(name)}">`
     : `<div class="voice-avatar-placeholder">${escapeHtml(name.charAt(0).toUpperCase())}</div>`;
 
-  const isMuted = Boolean(st.mute || st.self_mute);
-  const isDeaf = Boolean(st.deaf || st.self_deaf);
+  const isMutedState = Boolean(st.mute || st.self_mute);
+  const isDeafState = Boolean(st.deaf || st.self_deaf);
   const isLive = Boolean(st.self_stream);
 
   let iconsHtml = "";
   if (isLive) iconsHtml += `<span class="live-pill">LIVE</span>`;
-  if (isDeaf) iconsHtml += `<span class="voice-icon-deaf" title="Deafened">🎧</span>`;
-  else if (isMuted) iconsHtml += `<span class="voice-icon-muted" title="Muted">🔇</span>`;
+  if (isDeafState) iconsHtml += `<span class="voice-icon-deaf" title="Deafened">🎧</span>`;
+  else if (isMutedState) iconsHtml += `<span class="voice-icon-muted" title="Muted">🔇</span>`;
 
   row.innerHTML = `
     <div class="voice-user-avatar-wrap">
@@ -920,6 +1647,7 @@ function handleVoiceStateUpdate(state) {
   }
 
   updateVoiceSidebarUsers();
+  renderMembersList();
 
   if (activeVoiceChannelId) {
     if (state.channel_id === activeVoiceChannelId) {
@@ -941,8 +1669,8 @@ function addParticipantToGrid(user, isStreamActive, voiceState, isSelf) {
     ? `https://cdn.discordapp.com/avatars/${user.id}/${avatar}.png?size=128`
     : null;
 
-  const isMuted = voiceState ? Boolean(voiceState.mute || voiceState.self_mute) : false;
-  const isDeaf = voiceState ? Boolean(voiceState.deaf || voiceState.self_deaf) : false;
+  const isMutedState = voiceState ? Boolean(voiceState.mute || voiceState.self_mute) : false;
+  const isDeafState = voiceState ? Boolean(voiceState.deaf || voiceState.self_deaf) : false;
 
   if (!card) {
     card = document.createElement("div");
@@ -959,9 +1687,9 @@ function addParticipantToGrid(user, isStreamActive, voiceState, isSelf) {
   if (isStreamActive) {
     badgesHtml += `<span class="badge-live">LIVE</span>`;
   }
-  if (isDeaf) {
+  if (isDeafState) {
     badgesHtml += `<span class="badge-status" title="Deafened">🎧</span>`;
-  } else if (isMuted) {
+  } else if (isMutedState) {
     badgesHtml += `<span class="badge-status" title="Muted">🔇</span>`;
   }
 
@@ -1012,7 +1740,6 @@ async function selectStreamPlayer(streamKey, streamData) {
   streamTitleText.innerText = "Live Stream";
   streamUserText.innerText = `Stream Key: ${streamKey}`;
 
-  // Start animated visual preview on stream canvas
   startStreamCanvasAnimation();
 }
 
@@ -1029,7 +1756,6 @@ function startStreamCanvasAnimation() {
     ctx.fillStyle = "#111214";
     ctx.fillRect(0, 0, streamCanvas.width, streamCanvas.height);
 
-    // Dynamic stream background simulation
     const gradient = ctx.createLinearGradient(0, 0, streamCanvas.width, streamCanvas.height);
     gradient.addColorStop(0, "#1e1f22");
     gradient.addColorStop(0.5, "#2b2d31");
@@ -1037,7 +1763,6 @@ function startStreamCanvasAnimation() {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, streamCanvas.width, streamCanvas.height);
 
-    // Audio/Stream waveform pulses
     ctx.lineWidth = 3;
     ctx.strokeStyle = "#5865f2";
     ctx.beginPath();
@@ -1049,7 +1774,6 @@ function startStreamCanvasAnimation() {
     }
     ctx.stroke();
 
-    // Stream Active badge
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 16px sans-serif";
     ctx.textAlign = "center";

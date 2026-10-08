@@ -52,13 +52,14 @@ impl VoiceGatewayClient {
                 channel_id,
                 user_id,
                 session_id,
-                app_handle,
+                app_handle.clone(),
                 cmd_rx,
                 is_running_clone,
             )
             .await
             {
                 error!("Voice gateway loop ended: {:?}", e);
+                let _ = app_handle.emit("discord-voice-error", format!("{}", e));
             }
         });
 
@@ -182,14 +183,6 @@ async fn run_voice_loop(
                                             "user_id": user_id,
                                             "session_id": session_id,
                                             "token": token,
-                                            "video": true,
-                                            "streams": [
-                                                {
-                                                    "type": "video",
-                                                    "rid": "100",
-                                                    "quality": 100
-                                                }
-                                            ],
                                             "max_dave_protocol_version": 1
                                         }
                                     });
@@ -392,10 +385,14 @@ async fn run_voice_loop(
                     }
                     Some(Ok(WsMessage::Close(reason))) => {
                         info!("Voice gateway closed connection: {:?}", reason);
+                        if let Some(ref r) = reason {
+                            let _ = app_handle.emit("discord-voice-error", format!("Voice closed ({}): {}", r.code, r.reason));
+                        }
                         break;
                     }
                     Some(Err(e)) => {
                         error!("Voice gateway websocket error: {}", e);
+                        let _ = app_handle.emit("discord-voice-error", format!("Voice WebSocket error: {}", e));
                         break;
                     }
                     None => break,

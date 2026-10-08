@@ -12,108 +12,594 @@
     <div id="servers-bar">
       <div class="server-icon active" id="btn-dm" title="Direct Messages">
         <div class="server-pill"></div>
-        <span>@</span>
+        <svg width="28" height="20" viewBox="0 0 28 20" fill="currentColor">
+          <path d="M23.0212 1.67671C21.3107 0.879656 19.5079 0.318797 17.6584 0C17.4062 0.461742 17.1149 1.06025 16.914 1.54924C14.9351 1.25302 12.9697 1.25302 11.0287 1.54924C10.8278 1.06025 10.5365 0.461742 10.2709 0C8.42144 0.318797 6.61864 0.879656 4.90815 1.67671C1.46451 6.84073 0.528405 11.8741 0.992681 16.8409C3.27558 18.5446 5.48784 19.5828 7.66223 20.2526C8.20456 19.5085 8.68652 18.7088 9.09673 17.8687C8.30939 17.5714 7.55403 17.1952 6.84275 16.7441C7.03456 16.6027 7.22151 16.4526 7.40058 16.2976C11.6622 18.2863 16.2974 18.2863 20.5186 16.2976C20.6976 16.4526 20.8846 16.6027 21.0764 16.7441C20.3651 17.1952 19.6098 17.5714 18.8224 17.8687C19.2326 18.7088 19.7146 19.5085 20.2569 20.2526C22.4313 19.5828 24.6436 18.5446 26.9265 16.8409C27.4697 11.0903 26.0125 6.10398 23.0212 1.67671ZM9.3095 13.7845C8.01297 13.7845 6.94276 12.5855 6.94276 11.1162C6.94276 9.64696 7.98978 8.44801 9.3095 8.44801C10.6292 8.44801 11.7001 9.64696 11.6762 11.1162C11.6762 12.5855 10.6292 13.7845 9.3095 13.7845ZM18.6096 13.7845C17.3131 13.7845 16.2429 12.5855 16.2429 11.1162C16.2429 9.64696 17.2899 8.44801 18.6096 8.44801C19.9293 8.44801 21.0002 9.64696 20.9763 11.1162C20.9763 12.5855 19.9293 13.7845 18.6096 13.7845Z"/>
+        </svg>
       </div>
       <div class="server-separator"></div>
-      <div id="guilds-container" style="display: flex; flex-direction: column; gap: 8px; align-items: center; width: 100%;">
+      <div id="guilds-container">
         <!-- Guild icons populated dynamically -->
+      </div>
+      <div class="server-separator"></div>
+      <div class="server-icon action-btn" id="btn-add-server" title="Add a Server">
+        <div class="server-pill"></div>
+        <span>+</span>
+      </div>
+      <div class="server-icon action-btn" id="btn-explore-servers" title="Explore Discoverable Servers">
+        <div class="server-pill"></div>
+        <span>🧭</span>
       </div>
     </div>
 
     <!-- CHANNELS SIDEBAR -->
     <div id="channels-bar">
+      <!-- SERVER HEADER -->
       <div id="server-header">
         <span id="server-name-label">Direct Messages</span>
-        <span style="opacity: 0.6; font-size: 12px;">▼</span>
+        <svg class="header-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
       </div>
 
+      <!-- SERVER DROPDOWN MENU -->
+      <div id="server-dropdown-menu" style="display: none;">
+        <div class="dropdown-item" id="menu-server-settings">
+          <span>Server Settings</span>
+          <span>⚙️</span>
+        </div>
+        <div class="dropdown-item" id="menu-create-channel">
+          <span>Create Channel</span>
+          <span>➕</span>
+        </div>
+        <div class="dropdown-item" id="menu-notif-settings">
+          <span>Notification Settings</span>
+          <span>🔔</span>
+        </div>
+        <div class="dropdown-separator"></div>
+        <div class="dropdown-item danger" id="menu-leave-server">
+          <span>Leave Server</span>
+          <span>🚪</span>
+        </div>
+      </div>
+
+      <!-- DM HEADER LIST (WHEN IN DIRECT MESSAGES) -->
+      <div id="dm-nav" style="display: none;">
+        <div class="dm-nav-item active" id="btn-dm-friends">
+          <span class="dm-nav-icon">👥</span>
+          <span>Friends</span>
+          <span class="badge" id="badge-friends-count" style="display: none;">0</span>
+        </div>
+        <div class="dm-nav-item" id="btn-dm-nitro">
+          <span class="dm-nav-icon">💎</span>
+          <span>Nitro</span>
+        </div>
+        <div class="dm-section-header">
+          <span>DIRECT MESSAGES</span>
+          <span title="Create DM" style="cursor: pointer;">+</span>
+        </div>
+      </div>
+
+      <!-- CHANNELS LIST -->
       <div id="channels-list">
         <!-- Channels list populated dynamically -->
       </div>
 
       <!-- VOICE CONNECTED BAR -->
-      <div id="voice-connected-bar">
+      <div id="voice-connected-bar" style="display: none;">
         <div class="voice-status-header">
-          <div class="voice-status-title">
-            <span>●</span>
-            <span>Voice Connected</span>
+          <div class="voice-status-info">
+            <div class="voice-status-title">
+              <span class="ping-dot">●</span>
+              <span id="voice-rtc-label">Voice Connected</span>
+            </div>
+            <div class="voice-status-channel" id="voice-channel-name">Voice Channel</div>
+            <div id="voice-error-banner" style="display: none;"></div>
           </div>
           <div class="voice-quick-actions">
-            <button class="btn-icon" id="btn-toggle-mic" title="Mute/Unmute">🎙️</button>
-            <button class="btn-icon" id="btn-toggle-deaf" title="Deafen/Undeafen">🎧</button>
-            <button class="btn-icon" id="btn-stream-toggle" title="Go Live / Stream">📺</button>
-            <button class="btn-icon disconnect" id="btn-voice-disconnect" title="Disconnect">📞</button>
+            <button class="btn-voice-tool" id="btn-stream-toggle" title="Share Your Screen">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4 6H20V16H4zM2 4C0.9 4 0 4.9 0 6V16C0 17.1 0.9 18 2 18H9V20H7V22H17V20H15V18H22C23.1 18 24 17.1 24 16V6C24 4.9 23.1 4 22 4H2z"/>
+              </svg>
+            </button>
+            <button class="btn-voice-tool disconnect" id="btn-voice-disconnect" title="Disconnect">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.99.99 0 0 1 0-1.41C3.25 8.79 7.4 7 12 7s8.75 1.79 11.71 4.67c.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+              </svg>
+            </button>
           </div>
         </div>
-        <div class="voice-status-channel" id="voice-channel-name">Voice Channel</div>
       </div>
 
       <!-- USER FOOTER -->
       <div id="user-footer">
-        <div class="user-avatar" id="current-user-avatar">
-          <span id="current-user-initial">?</span>
-          <div class="user-status-dot"></div>
+        <div class="user-avatar-wrap" id="current-user-avatar-wrap">
+          <div class="user-avatar" id="current-user-avatar">
+            <span id="current-user-initial">?</span>
+            <div class="user-status-dot online"></div>
+          </div>
         </div>
         <div class="user-details">
           <div class="username" id="current-username">Loading...</div>
           <div class="user-tag" id="current-usertag">#0000</div>
         </div>
-        <button class="btn-icon" id="btn-logout" title="Settings / Logout">⚙️</button>
+        <div class="user-controls">
+          <button class="btn-user-control" id="btn-user-mic" title="Mute">
+            <svg class="mic-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+          </button>
+          <button class="btn-user-control" id="btn-user-deaf" title="Deafen">
+            <svg class="deaf-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 3C6.48 3 2 7.48 2 13v6c0 1.1.9 2 2 2h3v-8H4v-1c0-4.41 3.59-8 8-8s8 3.59 8 8v1h-3v8h3c1.1 0 2-.9 2-2v-6c0-5.52-4.48-10-10-10z"/>
+            </svg>
+          </button>
+          <button class="btn-user-control" id="btn-open-settings" title="User Settings">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- STATUS SELECTOR MENU -->
+      <div id="user-status-menu" style="display: none;">
+        <div class="status-menu-item" data-status="online">
+          <span class="status-indicator online"></span>
+          <span>Online</span>
+        </div>
+        <div class="status-menu-item" data-status="idle">
+          <span class="status-indicator idle"></span>
+          <span>Idle</span>
+        </div>
+        <div class="status-menu-item" data-status="dnd">
+          <span class="status-indicator dnd"></span>
+          <span>Do Not Disturb</span>
+        </div>
+        <div class="status-menu-item" data-status="invisible">
+          <span class="status-indicator invisible"></span>
+          <span>Invisible</span>
+        </div>
       </div>
     </div>
 
-    <!-- MAIN CHAT & STAGE AREA -->
+    <!-- MAIN CONTENT AREA -->
     <div id="main-area">
-      <!-- HEADER -->
+      <!-- HEADER BAR -->
       <div id="chat-header">
         <div class="channel-title">
           <span id="chat-header-icon">#</span>
           <span id="chat-header-name">select-a-channel</span>
+          <span class="header-divider"></span>
           <span class="channel-topic" id="chat-header-topic"></span>
         </div>
-        <div style="display: flex; gap: 10px; align-items: center;">
-          <button class="btn-icon" id="btn-toggle-stage-view" style="display: none;" title="Toggle Stage / Chat">🎙️ Stage</button>
+        <div class="header-tools">
+          <button class="btn-header-tool" id="btn-toggle-stage-view" style="display: none;" title="Toggle Stage / Chat">🎙️ Stage</button>
+          <button class="btn-header-tool" id="btn-header-call" style="display: none;" title="Start Voice Call">📞</button>
+          <button class="btn-header-tool" id="btn-header-videocall" style="display: none;" title="Start Video Call">📹</button>
+          <button class="btn-header-tool" id="btn-header-threads" title="Threads">💬</button>
+          <button class="btn-header-tool" id="btn-header-notifs" title="Notification Settings">🔔</button>
+          <button class="btn-header-tool" id="btn-header-pins" title="Pinned Messages">📌</button>
+          <button class="btn-header-tool" id="btn-toggle-members" title="Member List">👥</button>
+          <div class="search-bar">
+            <input type="text" id="search-input" placeholder="Search">
+            <span class="search-icon">🔍</span>
+          </div>
+          <button class="btn-header-tool" id="btn-header-inbox" title="Inbox">📥</button>
+          <button class="btn-header-tool" id="btn-header-help" title="Help">❓</button>
         </div>
       </div>
 
-      <!-- STAGE / VOICE VIEW -->
-      <div id="stage-container">
-        <!-- Stream Switcher Bar -->
-        <div id="stream-switcher-bar">
-          <!-- Active stream chips -->
-        </div>
-
-        <!-- Stream Player Box -->
-        <div id="stream-player-box" style="display: none;">
-          <canvas id="stream-canvas"></canvas>
-          <div class="stream-overlay">
-            <div class="stream-info">
-              <span class="stream-title" id="stream-title-text">Watching Stream</span>
-              <span class="stream-subtitle" id="stream-user-text">Streamer</span>
+      <!-- INNER WRAPPER: CHAT + MEMBERS SIDEBAR -->
+      <div id="chat-and-sidebar-wrap">
+        <div id="chat-pane">
+          <!-- FRIENDS HOME VIEW (WHEN HOME TAB SELECTED) -->
+          <div id="friends-view" style="display: none;">
+            <div id="friends-top-tabs">
+              <div class="friends-tab active" data-tab="online">Online <span class="tab-badge" id="badge-online-count">0</span></div>
+              <div class="friends-tab" data-tab="all">All <span class="tab-badge" id="badge-all-count">0</span></div>
+              <div class="friends-tab" data-tab="pending">Pending <span class="tab-badge" id="badge-pending-count">0</span></div>
+              <div class="friends-tab" data-tab="blocked">Blocked</div>
+              <div class="friends-tab add-friend" data-tab="add">Add Friend</div>
             </div>
-            <div class="stream-actions">
-              <button class="btn-send" id="btn-stream-exit" style="background: var(--red);">Exit Stream</button>
+            <div id="friends-tab-content">
+              <div id="friends-search-bar">
+                <input type="text" id="friends-filter-input" placeholder="Search friends">
+              </div>
+              <div id="friends-list-container">
+                <!-- Friends rows populated dynamically -->
+              </div>
+              <div id="add-friend-panel" style="display: none;">
+                <h3>ADD FRIEND</h3>
+                <p>You can add friends with their Discord Tag.</p>
+                <div class="add-friend-input-box">
+                  <input type="text" id="add-friend-input" placeholder="Enter a Username#0000 or @username">
+                  <button class="btn-send-request" id="btn-send-friend-request">Send Friend Request</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STAGE / VOICE VIEW -->
+          <div id="stage-container" style="display: none;">
+            <div id="stream-switcher-bar"></div>
+            <div id="stream-player-box" style="display: none;">
+              <canvas id="stream-canvas"></canvas>
+              <div class="stream-overlay">
+                <div class="stream-info">
+                  <span class="stream-title" id="stream-title-text">Watching Stream</span>
+                  <span class="stream-subtitle" id="stream-user-text">Streamer</span>
+                </div>
+                <div class="stream-actions">
+                  <button class="btn-send" id="btn-stream-exit" style="background: var(--red);">Exit Stream</button>
+                </div>
+              </div>
+            </div>
+            <div class="stage-section-title">Participants</div>
+            <div id="participant-grid"></div>
+            <!-- Stage Call Controls Bar -->
+            <div id="stage-controls-bar">
+              <button class="btn-stage-control" id="btn-stage-mic" title="Mute/Unmute">🎙️</button>
+              <button class="btn-stage-control" id="btn-stage-video" title="Share Camera">📹</button>
+              <button class="btn-stage-control" id="btn-stage-share" title="Share Screen">🖥️</button>
+              <button class="btn-stage-control danger" id="btn-stage-leave" title="Disconnect">📞</button>
+            </div>
+          </div>
+
+          <!-- MESSAGES LIST -->
+          <div id="messages-list">
+            <div class="messages-welcome">
+              <div class="welcome-hash">#</div>
+              <div class="welcome-title">Welcome to Abaddon!</div>
+              <div class="welcome-desc">Select a server channel or private message to begin chatting.</div>
+            </div>
+          </div>
+
+          <!-- CHAT INPUT -->
+          <div id="chat-input-bar">
+            <!-- Replying Bar Banner -->
+            <div id="reply-banner" style="display: none;">
+              <span>Replying to <b id="reply-target-author">User</b></span>
+              <button id="btn-cancel-reply" title="Cancel Reply">✕</button>
+            </div>
+            <div class="input-container">
+              <button class="btn-input-attach" id="btn-upload-file" title="Upload a File">
+                <span>+</span>
+              </button>
+              <input type="file" id="file-upload-input" style="display: none;">
+              <textarea id="message-textarea" placeholder="Message #general" rows="1"></textarea>
+              <div class="input-actions-right">
+                <button class="btn-input-tool" id="btn-gift-nitro" title="Gift Nitro">🎁</button>
+                <button class="btn-input-tool" id="btn-gif-picker" title="GIF">GIF</button>
+                <button class="btn-input-tool" id="btn-sticker-picker" title="Sticker">🏷️</button>
+                <button class="btn-input-tool" id="btn-emoji-toggle" title="Insert Emoji">😀</button>
+                <button class="btn-send" id="btn-send-message">Send</button>
+              </div>
+            </div>
+
+            <!-- EMOJI PICKER POPOVER -->
+            <div id="emoji-picker-popover" style="display: none;">
+              <div class="emoji-search-bar">
+                <input type="text" id="emoji-search-input" placeholder="Search emojis">
+              </div>
+              <div class="emoji-categories-nav">
+                <span class="emoji-cat-btn active" data-cat="smileys">😀</span>
+                <span class="emoji-cat-btn" data-cat="gestures">👋</span>
+                <span class="emoji-cat-btn" data-cat="nature">🐻</span>
+                <span class="emoji-cat-btn" data-cat="food">🍔</span>
+                <span class="emoji-cat-btn" data-cat="activity">⚽</span>
+                <span class="emoji-cat-btn" data-cat="objects">💡</span>
+                <span class="emoji-cat-btn" data-cat="symbols">💖</span>
+              </div>
+              <div class="emoji-grid" id="emoji-grid">
+                <!-- Emojis populated by JS -->
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Participant Grid -->
-        <div style="font-weight: bold; color: var(--text-muted); font-size: 12px; text-transform: uppercase;">Participants</div>
-        <div id="participant-grid">
-          <!-- Participant Cards -->
+        <!-- RIGHT MEMBERS SIDEBAR -->
+        <div id="members-sidebar">
+          <div id="members-container">
+            <!-- Members dynamically grouped into ONLINE / OFFLINE -->
+          </div>
         </div>
       </div>
+    </div>
+  </div>
 
-      <!-- MESSAGES LIST -->
-      <div id="messages-list">
-        <div style="color: var(--text-muted); text-align: center; margin-top: 40px;">Select a channel to begin messaging.</div>
+  <!-- DISCORD USER SETTINGS MODAL -->
+  <div id="settings-modal" style="display: none;">
+    <div class="settings-sidebar">
+      <div class="settings-sidebar-content">
+        <div class="settings-header">USER SETTINGS</div>
+        <div class="settings-tab active" data-tab="account">My Account</div>
+        <div class="settings-tab" data-tab="profile">User Profile</div>
+        <div class="settings-header">APP SETTINGS</div>
+        <div class="settings-tab" data-tab="appearance">Appearance</div>
+        <div class="settings-tab" data-tab="voice">Voice & Video</div>
+        <div class="settings-tab" data-tab="text">Text & Images</div>
+        <div class="settings-tab" data-tab="notifications">Notifications</div>
+        <div class="settings-tab" data-tab="proxy">Network & Proxy</div>
+        <div class="settings-tab" data-tab="keybinds">Keybinds</div>
+        <div class="settings-separator"></div>
+        <div class="settings-tab logout" id="btn-settings-logout">Log Out</div>
+      </div>
+    </div>
+
+    <div class="settings-content-pane">
+      <!-- ESC CLOSE BUTTON -->
+      <div class="settings-close-column">
+        <div class="btn-settings-esc" id="btn-close-settings" title="Close Settings">
+          <span>✕</span>
+        </div>
+        <span class="esc-label">ESC</span>
       </div>
 
-      <!-- CHAT INPUT -->
-      <div id="chat-input-bar">
-        <div class="input-container">
-          <textarea id="message-textarea" placeholder="Message #general" rows="1"></textarea>
-          <button class="btn-send" id="btn-send-message">Send</button>
+      <div class="settings-content" id="settings-tab-content">
+        <!-- MY ACCOUNT TAB -->
+        <div class="settings-section" id="section-account">
+          <h2 class="settings-title">My Account</h2>
+          <div class="profile-card-preview">
+            <div class="profile-banner-preview" id="account-banner-preview"></div>
+            <div class="profile-avatar-row">
+              <div class="profile-avatar-large" id="account-avatar-large">
+                <span id="account-initial-large">?</span>
+              </div>
+            </div>
+            <div class="profile-card-details">
+              <div class="profile-display-name" id="account-display-name">Username</div>
+              <div class="profile-handle" id="account-handle">@username</div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="card-row">
+              <div>
+                <div class="card-field-label">USERNAME</div>
+                <div class="card-field-value" id="account-username-value">username</div>
+              </div>
+              <button class="btn-card-edit" id="btn-edit-username">Edit</button>
+            </div>
+            <div class="card-row">
+              <div>
+                <div class="card-field-label">EMAIL</div>
+                <div class="card-field-value">••••••••••••@gmail.com</div>
+              </div>
+              <button class="btn-card-edit">Reveal</button>
+            </div>
+            <div class="card-row">
+              <div>
+                <div class="card-field-label">PHONE NUMBER</div>
+                <div class="card-field-value">You haven't added a phone number yet.</div>
+              </div>
+              <button class="btn-card-edit">Add</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- USER PROFILE TAB -->
+        <div class="settings-section" id="section-profile" style="display: none;">
+          <h2 class="settings-title">User Profile</h2>
+          <div class="form-group">
+            <label class="settings-label">DISPLAY NAME</label>
+            <input type="text" class="settings-input" id="profile-display-name-input" placeholder="Enter your display name">
+          </div>
+          <div class="form-group">
+            <label class="settings-label">PRONOUNS</label>
+            <input type="text" class="settings-input" id="profile-pronouns-input" placeholder="e.g. they/them">
+          </div>
+          <div class="form-group">
+            <label class="settings-label">ABOUT ME</label>
+            <textarea class="settings-textarea" id="profile-bio-input" placeholder="Tell the world about yourself"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="settings-label">BANNER COLOR</label>
+            <input type="color" class="settings-color" id="profile-banner-color-input" value="#5865f2">
+          </div>
+          <button class="btn-settings-save" id="btn-save-profile">Save Changes</button>
+        </div>
+
+        <!-- APPEARANCE TAB -->
+        <div class="settings-section" id="section-appearance" style="display: none;">
+          <h2 class="settings-title">Appearance</h2>
+          <div class="settings-subgroup-title">THEME</div>
+          <div class="theme-options">
+            <div class="theme-card active" data-theme="dark">
+              <div class="theme-preview dark"></div>
+              <span>Dark</span>
+            </div>
+            <div class="theme-card" data-theme="midnight">
+              <div class="theme-preview midnight"></div>
+              <span>Midnight</span>
+            </div>
+            <div class="theme-card" data-theme="light">
+              <div class="theme-preview light"></div>
+              <span>Light</span>
+            </div>
+          </div>
+          <div class="settings-subgroup-title" style="margin-top: 24px;">MESSAGE DISPLAY</div>
+          <div class="radio-option">
+            <input type="radio" name="message-display" id="display-cozy" value="cozy" checked>
+            <label for="display-cozy"><b>Cozy</b> — Modern, beautiful, and displays avatars.</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" name="message-display" id="display-compact" value="compact">
+            <label for="display-compact"><b>Compact</b> — Fits more messages on screen, no avatars.</label>
+          </div>
+          <div class="settings-subgroup-title" style="margin-top: 24px;">CHAT FONT SCALING</div>
+          <input type="range" min="12" max="20" value="14" class="settings-slider" id="font-scale-slider">
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;" id="font-scale-label">14px</div>
+        </div>
+
+        <!-- VOICE & VIDEO TAB -->
+        <div class="settings-section" id="section-voice" style="display: none;">
+          <h2 class="settings-title">Voice & Video</h2>
+          <div class="grid-2-col">
+            <div class="form-group">
+              <label class="settings-label">INPUT DEVICE</label>
+              <select class="settings-select" id="voice-input-device">
+                <option value="default">Default Device</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="settings-label">OUTPUT DEVICE</label>
+              <select class="settings-select" id="voice-output-device">
+                <option value="default">Default Device</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid-2-col">
+            <div class="form-group">
+              <label class="settings-label">INPUT VOLUME</label>
+              <input type="range" min="0" max="100" value="100" class="settings-slider" id="voice-input-volume">
+            </div>
+            <div class="form-group">
+              <label class="settings-label">OUTPUT VOLUME</label>
+              <input type="range" min="0" max="100" value="100" class="settings-slider" id="voice-output-volume">
+            </div>
+          </div>
+          <div class="settings-subgroup-title">MIC TEST</div>
+          <div class="mic-test-wrap">
+            <button class="btn-card-edit" id="btn-test-mic">Let's Check</button>
+            <div class="mic-meter-bar">
+              <div class="mic-meter-fill" id="mic-meter-fill"></div>
+            </div>
+          </div>
+          <div class="settings-subgroup-title" style="margin-top: 24px;">INPUT MODE</div>
+          <div class="radio-option">
+            <input type="radio" name="input-mode" id="mode-vad" value="vad" checked>
+            <label for="mode-vad"><b>Voice Activity</b> (Automatic detection)</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" name="input-mode" id="mode-ptt" value="ptt">
+            <label for="mode-ptt"><b>Push to Talk</b></label>
+          </div>
+          <div class="settings-subgroup-title" style="margin-top: 24px;">ADVANCED</div>
+          <div class="toggle-option">
+            <div>
+              <div class="toggle-label">Noise Suppression (Krisp)</div>
+              <div class="toggle-desc">Removes background noises from your microphone stream.</div>
+            </div>
+            <input type="checkbox" id="check-krisp" checked>
+          </div>
+        </div>
+
+        <!-- TEXT & IMAGES TAB -->
+        <div class="settings-section" id="section-text" style="display: none;">
+          <h2 class="settings-title">Text & Images</h2>
+          <div class="toggle-option">
+            <div>
+              <div class="toggle-label">Show Attachments & Uploaded Images</div>
+              <div class="toggle-desc">Display media photos and images in text chat automatically.</div>
+            </div>
+            <input type="checkbox" id="check-show-images" checked>
+          </div>
+          <div class="toggle-option">
+            <div>
+              <div class="toggle-label">Embeds and Link Previews</div>
+              <div class="toggle-desc">Show rich embeds and link summaries in messages.</div>
+            </div>
+            <input type="checkbox" id="check-show-embeds" checked>
+          </div>
+          <div class="toggle-option">
+            <div>
+              <div class="toggle-label">Emoji Autocomplete</div>
+              <div class="toggle-desc">Suggest emojis when typing :colon: syntax.</div>
+            </div>
+            <input type="checkbox" id="check-emoji-suggest" checked>
+          </div>
+        </div>
+
+        <!-- NOTIFICATIONS TAB -->
+        <div class="settings-section" id="section-notifications" style="display: none;">
+          <h2 class="settings-title">Notifications</h2>
+          <div class="toggle-option">
+            <div>
+              <div class="toggle-label">Enable Desktop Notifications</div>
+              <div class="toggle-desc">Receive popups for direct messages and mentions.</div>
+            </div>
+            <input type="checkbox" id="check-desktop-notifs" checked>
+          </div>
+          <div class="toggle-option">
+            <div>
+              <div class="toggle-label">Sound Effects</div>
+              <div class="toggle-desc">Play audio cue when receiving messages or joining voice.</div>
+            </div>
+            <input type="checkbox" id="check-sound-effects" checked>
+          </div>
+        </div>
+
+        <!-- NETWORK & PROXY TAB -->
+        <div class="settings-section" id="section-proxy" style="display: none;">
+          <h2 class="settings-title">Network & Proxy</h2>
+          <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
+            If you are in a region where Discord Voice or Gateway is blocked (e.g. Russia / Turkey / UAE), configure an HTTP or SOCKS5 proxy here to route all connections.
+          </p>
+          <div class="toggle-option">
+            <div>
+              <div class="toggle-label">Enable Proxy Connection</div>
+              <div class="toggle-desc">Route Discord Gateway and Voice Gateway requests through a proxy.</div>
+            </div>
+            <input type="checkbox" id="check-enable-proxy">
+          </div>
+          <div class="form-group" style="margin-top: 16px;">
+            <label class="settings-label">PROXY PROTOCOL</label>
+            <select class="settings-select" id="proxy-type">
+              <option value="socks5">SOCKS5 (e.g. Shadowsocks / V2Ray / Xray / Tor)</option>
+              <option value="http">HTTP / HTTPS Proxy</option>
+            </select>
+          </div>
+          <div class="grid-2-col">
+            <div class="form-group">
+              <label class="settings-label">PROXY HOST</label>
+              <input type="text" class="settings-input" id="proxy-host" placeholder="127.0.0.1">
+            </div>
+            <div class="form-group">
+              <label class="settings-label">PROXY PORT</label>
+              <input type="number" class="settings-input" id="proxy-port" placeholder="1080">
+            </div>
+          </div>
+          <div class="grid-2-col">
+            <div class="form-group">
+              <label class="settings-label">USERNAME (OPTIONAL)</label>
+              <input type="text" class="settings-input" id="proxy-user" placeholder="Proxy user">
+            </div>
+            <div class="form-group">
+              <label class="settings-label">PASSWORD (OPTIONAL)</label>
+              <input type="password" class="settings-input" id="proxy-pass" placeholder="Proxy password">
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; margin-top: 16px;">
+            <button class="btn-settings-save" id="btn-save-proxy">Save & Apply Proxy</button>
+            <button class="btn-card-edit" id="btn-test-proxy">Test Proxy Connection</button>
+          </div>
+          <div id="proxy-status-message" style="margin-top: 12px; font-size: 13px;"></div>
+        </div>
+
+        <!-- KEYBINDS TAB -->
+        <div class="settings-section" id="section-keybinds" style="display: none;">
+          <h2 class="settings-title">Keybinds</h2>
+          <div class="card-row">
+            <div>
+              <div class="card-field-label">PUSH TO TALK</div>
+              <div class="card-field-value">Caps Lock / Mouse 4</div>
+            </div>
+            <button class="btn-card-edit">Record Keybind</button>
+          </div>
+          <div class="card-row">
+            <div>
+              <div class="card-field-label">TOGGLE MUTE</div>
+              <div class="card-field-value">Ctrl + Shift + M</div>
+            </div>
+            <button class="btn-card-edit">Record Keybind</button>
+          </div>
+          <div class="card-row">
+            <div>
+              <div class="card-field-label">TOGGLE DEAFEN</div>
+              <div class="card-field-value">Ctrl + Shift + D</div>
+            </div>
+            <button class="btn-card-edit">Record Keybind</button>
+          </div>
         </div>
       </div>
     </div>
@@ -122,18 +608,23 @@
   <!-- LOGIN MODAL -->
   <div id="login-modal">
     <div class="login-box">
-      <div class="login-title">Abaddon</div>
-      <div class="login-subtitle">Discord client in Rust with Tauri</div>
+      <div class="login-logo-wrap">
+        <svg width="48" height="36" viewBox="0 0 28 20" fill="var(--brand)">
+          <path d="M23.0212 1.67671C21.3107 0.879656 19.5079 0.318797 17.6584 0C17.4062 0.461742 17.1149 1.06025 16.914 1.54924C14.9351 1.25302 12.9697 1.25302 11.0287 1.54924C10.8278 1.06025 10.5365 0.461742 10.2709 0C8.42144 0.318797 6.61864 0.879656 4.90815 1.67671C1.46451 6.84073 0.528405 11.8741 0.992681 16.8409C3.27558 18.5446 5.48784 19.5828 7.66223 20.2526C8.20456 19.5085 8.68652 18.7088 9.09673 17.8687C8.30939 17.5714 7.55403 17.1952 6.84275 16.7441C7.03456 16.6027 7.22151 16.4526 7.40058 16.2976C11.6622 18.2863 16.2974 18.2863 20.5186 16.2976C20.6976 16.4526 20.8846 16.6027 21.0764 16.7441C20.3651 17.1952 19.6098 17.5714 18.8224 17.8687C19.2326 18.7088 19.7146 19.5085 20.2569 20.2526C22.4313 19.5828 24.6436 18.5446 26.9265 16.8409C27.4697 11.0903 26.0125 6.10398 23.0212 1.67671ZM9.3095 13.7845C8.01297 13.7845 6.94276 12.5855 6.94276 11.1162C6.94276 9.64696 7.98978 8.44801 9.3095 8.44801C10.6292 8.44801 11.7001 9.64696 11.6762 11.1162C11.6762 12.5855 10.6292 13.7845 9.3095 13.7845ZM18.6096 13.7845C17.3131 13.7845 16.2429 12.5855 16.2429 11.1162C16.2429 9.64696 17.2899 8.44801 18.6096 8.44801C19.9293 8.44801 21.0002 9.64696 20.9763 11.1162C20.9763 12.5855 19.9293 13.7845 18.6096 13.7845Z"/>
+        </svg>
+      </div>
+      <div class="login-title">Welcome back!</div>
+      <div class="login-subtitle">We're so excited to see you again!</div>
       <div class="form-group">
-        <label class="form-label">Discord Token</label>
+        <label class="form-label">DISCORD TOKEN</label>
         <input type="password" id="token-input" class="form-input" placeholder="Paste your Discord User Token here">
       </div>
-      <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted);">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); margin: 12px 0 20px;">
         <input type="checkbox" id="remember-token-check" checked>
         <label for="remember-token-check">Remember token locally</label>
       </div>
       <div class="login-error" id="login-error-msg"></div>
-      <button class="btn-login" id="btn-login-submit">Login</button>
+      <button class="btn-login" id="btn-login-submit">Log In</button>
     </div>
   </div>
 

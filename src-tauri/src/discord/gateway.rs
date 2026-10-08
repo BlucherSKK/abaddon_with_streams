@@ -144,7 +144,8 @@ async fn run_gateway_loop(
                                 "guild_id": guild_id,
                                 "channel_id": channel_id,
                                 "self_mute": self_mute,
-                                "self_deaf": self_deaf
+                                "self_deaf": self_deaf,
+                                "self_video": false
                             }
                         });
                         let _ = send_tx.send(WsMessage::Text(payload.to_string())).await;
